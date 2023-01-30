@@ -1,0 +1,9 @@
+[package]
+name = "sqparse"
+version = "1.0.0"
+edition = "2021"
+
+[dependencies]
+lazy_static = "1.4"
+lexical = { version = "6.0", features = ["power-of-two"] }
+nom = "7.1"

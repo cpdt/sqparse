@@ -1,0 +1,10 @@
+[package]
+name = "sqfmt-lib"
+version = "1.0.0"
+edition = "2021"
+
+[dependencies]
+im = "15.0"
+lexical = "6.0"
+serde = "1.0"
+sqparse = { path = "../sqparse" }

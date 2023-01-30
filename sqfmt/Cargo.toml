@@ -1,0 +1,13 @@
+[package]
+name = "sqfmt"
+version = "1.0.0"
+description = "A tool to format Squirrel and Squirrel_re code."
+edition = "2021"
+
+[dependencies]
+clap = { version = "3.0", features = ["derive"] }
+serde = "1.0"
+sqfmt-lib = { path = "../sqfmt-lib" }
+toml = "0.5"
+
+sqparse = { path = "../sqparse" }
