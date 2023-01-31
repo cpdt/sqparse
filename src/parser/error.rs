@@ -243,7 +243,7 @@ impl std::fmt::Display for ParseErrorType {
         match self {
             ParseErrorType::Internal(val) => write!(
                 f,
-                "internal error {val:?} - this should not be shown. Please report a bug at https://github.com/cpdt/sqfmt/issues with sample code.",
+                "internal error {val:?} - this should not be shown. Please report a bug at https://github.com/cpdt/sqparse/issues with sample code.",
             ),
             ParseErrorType::ExpectedTerminal(terminal) => write!(f, "expected `{}`", terminal.as_str()),
             ParseErrorType::ExpectedCompound2(token1, token2) => write!(f, "expected `{}{}`", token1.as_str(), token2.as_str()),
