@@ -1,8 +1,14 @@
 # sqparse
 
+[![Crates.io][crates-badge]][crates-url]
+[![Docs.rs][docs-badge]][docs-url]
 [![MIT licensed][mit-badge]][mit-url]
 [![Build status][build-badge]][build-url]
 
+[crates-badge]: https://img.shields.io/crates/v/sqparse.svg
+[crates-url]: https://crates.io/crates/sqparse
+[docs-badge]: https://img.shields.io/docsrs/sqparse
+[docs-url]: https://docs.rs/sqparse/
 [mit-badge]: https://img.shields.io/badge/license-MIT-blue.svg
 [mit-url]: https://github.com/cpdt/sqparse/blob/master/LICENSE
 [build-badge]: https://github.com/cpdt/sqparse/workflows/Build/badge.svg
@@ -23,7 +29,7 @@ Features:
    [R5Reloaded scripts](https://github.com/Mauler125/scripts_r5) successfully. The resulting ASTs have not been
    verified.
 
-There are probably bugs. No docs yet.
+There are probably bugs.
 
 ## Examples
 
