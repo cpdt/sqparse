@@ -2,7 +2,7 @@
 name = "sqparse"
 version = "0.1.0"
 edition = "2021"
-description = "Parser for the Squirrel language."
+description = "Squirrel3 and Squirrel_re parser."
 keywords = ["squirrel", "parser"]
 homepage = "https://github.com/cpdt/sqparse"
 repository = "https://github.com/cpdt/sqparse"
