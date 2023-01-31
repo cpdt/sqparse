@@ -5,6 +5,12 @@ use crate::ast::{
 };
 use crate::token::{LiteralToken, Token};
 
+/// An expression.
+///
+/// Many types of expressions are recursive, containing other expressions. [Precedence] is used to
+/// determine how to parse these expressions.
+///
+/// [Precedence]: crate::ast::Precedence
 #[derive(Debug, Clone)]
 pub enum Expression<'s> {
     Parens(ParensExpression<'s>),
@@ -28,7 +34,9 @@ pub enum Expression<'s> {
     Expect(ExpectExpression<'s>),
 }
 
-// `(` Expression `)`
+/// An expression enclosed in parentheses.
+///
+/// Grammar: `(` [Expression] `)`
 #[derive(Debug, Clone)]
 pub struct ParensExpression<'s> {
     pub open: &'s Token<'s>,
@@ -36,34 +44,44 @@ pub struct ParensExpression<'s> {
     pub close: &'s Token<'s>,
 }
 
-// Int | Char | Float | LiteralString | VerbatimString | AssetString
+/// A single literal value.
+///
+/// Grammar: [LiteralToken]
 #[derive(Debug, Clone)]
 pub struct LiteralExpression<'s> {
     pub literal: LiteralToken<'s>,
     pub token: &'s Token<'s>,
 }
 
-// Identifier
+/// A variable reference.
+///
+/// Grammar: [Identifier]
 #[derive(Debug, Clone)]
 pub struct VarExpression<'s> {
     pub name: Identifier<'s>,
 }
 
-// `::` Identifier
+/// A reference to a variable in the root table.
+///
+/// Grammar: `::` [Identifier]
 #[derive(Debug, Clone)]
 pub struct RootVarExpression<'s> {
     pub root: &'s Token<'s>,
     pub name: Identifier<'s>,
 }
 
-// PrefixOperator Expression
+/// An expression with a prefixed operator.
+///
+/// Grammar: [PrefixOperator] [Expression]
 #[derive(Debug, Clone)]
 pub struct PrefixExpression<'s> {
     pub operator: PrefixOperator<'s>,
     pub value: Box<Expression<'s>>,
 }
 
-// `{` TableSlot+ `...`? `}`
+/// A table literal.
+///
+/// Grammar: `{` [TableSlot]* `...`? `}`
 #[derive(Debug, Clone)]
 pub struct TableExpression<'s> {
     pub open: &'s Token<'s>,
@@ -72,14 +90,18 @@ pub struct TableExpression<'s> {
     pub close: &'s Token<'s>,
 }
 
-// `class` ClassDeclaration
+/// A class literal.
+///
+/// Grammar: `class` [ClassDeclaration]
 #[derive(Debug, Clone)]
 pub struct ClassExpression<'s> {
     pub class: &'s Token<'s>,
     pub declaration: ClassDeclaration<'s>,
 }
 
-// `[` ArrayValue+ `...`? `]`
+/// An array literal.
+///
+/// Grammar: `[` [ArrayValue]* `...`? `]`
 #[derive(Debug, Clone)]
 pub struct ArrayExpression<'s> {
     pub open: &'s Token<'s>,
@@ -88,7 +110,9 @@ pub struct ArrayExpression<'s> {
     pub close: &'s Token<'s>,
 }
 
-// Type? `function` FunctionDeclaration
+/// A function literal.
+///
+/// Grammar: [Type]? `function` [FunctionDeclaration]
 #[derive(Debug, Clone)]
 pub struct FunctionExpression<'s> {
     pub return_type: Option<Type<'s>>,
@@ -96,7 +120,9 @@ pub struct FunctionExpression<'s> {
     pub declaration: FunctionDeclaration<'s>,
 }
 
-// `delegate` Expression `:` Expression
+/// A delegate expression.
+///
+/// Grammar: `delegate` [Expression] `:` [Expression]
 #[derive(Debug, Clone)]
 pub struct DelegateExpression<'s> {
     pub delegate: &'s Token<'s>,
@@ -105,7 +131,9 @@ pub struct DelegateExpression<'s> {
     pub value: Box<Expression<'s>>,
 }
 
-// `<` Expression `,` Expression `,` Expression `>`
+/// A vector literal.
+///
+/// Grammar: `<` [Expression] `,` [Expression] `,` [Expression] `>`
 #[derive(Debug, Clone)]
 pub struct VectorExpression<'s> {
     pub open: &'s Token<'s>,
@@ -117,7 +145,9 @@ pub struct VectorExpression<'s> {
     pub close: &'s Token<'s>,
 }
 
-// `expect` Type `(` Expression `)`
+/// An expect expression.
+///
+/// Grammar: `expect` [Type] `(` [Expression] `)`
 #[derive(Debug, Clone)]
 pub struct ExpectExpression<'s> {
     pub expect: &'s Token<'s>,
@@ -127,7 +157,9 @@ pub struct ExpectExpression<'s> {
     pub close: &'s Token<'s>,
 }
 
-// Expression `[` Expression `]`
+/// An index expression.
+///
+/// Grammar: [Expression] `[` [Expression] `]`
 #[derive(Debug, Clone)]
 pub struct IndexExpression<'s> {
     pub base: Box<Expression<'s>>,
@@ -136,7 +168,9 @@ pub struct IndexExpression<'s> {
     pub close: &'s Token<'s>,
 }
 
-// Expression `.` IdentifierLike
+/// A property access expression.
+///
+/// Grammar: [Expression] `.` [MethodIdentifier]
 #[derive(Debug, Clone)]
 pub struct PropertyExpression<'s> {
     pub base: Box<Expression<'s>>,
@@ -144,7 +178,9 @@ pub struct PropertyExpression<'s> {
     pub property: MethodIdentifier<'s>,
 }
 
-// Expression `?` Expression `:` Expression
+/// A ternary expression.
+///
+/// Grammar: [Expression] `?` [Expression] `:` [Expression]
 #[derive(Debug, Clone)]
 pub struct TernaryExpression<'s> {
     pub condition: Box<Expression<'s>>,
@@ -154,7 +190,9 @@ pub struct TernaryExpression<'s> {
     pub false_value: Box<Expression<'s>>,
 }
 
-// Expression BinaryOperator Expression
+/// A binary expression - assignment, comparison, test, or math.
+///
+/// Grammar: [Expression] [BinaryOperator] [Expression]
 #[derive(Debug, Clone)]
 pub struct BinaryExpression<'s> {
     pub left: Box<Expression<'s>>,
@@ -162,14 +200,18 @@ pub struct BinaryExpression<'s> {
     pub right: Box<Expression<'s>>,
 }
 
-// Expression PostfixOperator
+/// An expression with a postfix operator.
+///
+/// Grammar: [Expression] [PostfixOperator]
 #[derive(Debug, Clone)]
 pub struct PostfixExpression<'s> {
     pub value: Box<Expression<'s>>,
     pub operator: PostfixOperator<'s>,
 }
 
-// Expression `(` SeparatedListTrailing0<Expression `,`> `)` TableExpression?
+/// A function call expression.
+///
+/// Grammar: [Expression] `(` [SeparatedListTrailing0]<[Expression] `,`> `)` [TableExpression]?
 #[derive(Debug, Clone)]
 pub struct CallExpression<'s> {
     pub function: Box<Expression<'s>>,
@@ -179,7 +221,9 @@ pub struct CallExpression<'s> {
     pub post_initializer: Option<TableExpression<'s>>,
 }
 
-// SeparatedList1<Expression `,`>
+/// A comma expression, with two or more sub-expressions.
+///
+/// Grammar: [SeparatedList1]<[Expression] `,`>
 #[derive(Debug, Clone)]
 pub struct CommaExpression<'s> {
     pub values: SeparatedList1<'s, Expression<'s>>,

@@ -6,6 +6,15 @@ struct ErrorDisplay<'s> {
     source: &'s str,
 }
 
+/// Returns an implementation of [`std::fmt::Display`] that can pretty-print the location of an
+/// error in a source string.
+///
+/// # Example
+/// ```text
+///    |
+///  2 | int[2] first_prop = ,
+///    |                     ^
+/// ```
 pub fn display_error(range: Range<usize>, source: &str) -> impl std::fmt::Display + '_ {
     ErrorDisplay { range, source }
 }

@@ -29,6 +29,28 @@ use crate::parser::token_list::TokenList;
 
 type ParseResult<'s, T> = Result<(TokenList<'s>, T), ParseError>;
 
+/// Parses an input token list into a syntax tree.
+///
+/// # Example
+/// ```
+/// use sqparse::{Flavor, parse, tokenize};
+///
+/// let source = r#"
+/// global function MyFunction
+///
+/// struct {
+///     int a
+/// } file
+///
+/// string function MyFunction( List<number> values ) {
+///     values.push(1 + 2)
+/// }
+/// "#;
+/// let tokens = tokenize(source, Flavor::SquirrelRespawn).unwrap();
+///
+/// let program = parse(&tokens).unwrap();
+/// assert_eq!(program.statements.len(), 3);
+/// ```
 pub fn parse<'s>(items: &'s [TokenItem<'s>]) -> Result<Program<'s>, ParseError> {
     let mut tokens = TokenList::new(items);
     let mut statements = Vec::new();

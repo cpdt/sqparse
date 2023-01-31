@@ -1,3 +1,14 @@
+/// Context information that can be attached to a [`ParseError`].
+///
+/// Essentially, if an error has a context, it means that the parser knows that the error is inside
+/// some specific syntactical construct.
+///
+/// This is intended to hint at the state of the parser to make syntax errors and parser debugging a
+/// bit easier.
+///
+/// Implements [`std::fmt::Display`] to write a useful description of the context.
+///
+/// [`ParseError`]: crate::ParseError
 #[derive(Debug, Clone, Copy)]
 pub enum ContextType {
     ParensExpression,
@@ -63,6 +74,26 @@ pub enum ContextType {
 }
 
 impl ContextType {
+    /// Returns if the context is "useful".
+    ///
+    /// This is intended to allow prioritising some context types over others.
+    ///
+    /// For example, in this code:
+    /// ```text
+    /// if (a > b) {
+    ///     invalid code
+    /// }
+    /// ```
+    ///
+    /// There are two possible contexts here, the [`IfStatement`] and the [`BlockStatement`] inside.
+    /// Normally an error contains the inner-most context, which in this case would be the
+    /// [`BlockStatement`]. But in this case the [`IfStatement`] is far more useful.
+    ///
+    /// [`BlockStatement`] is marked as _not useful_, meaning it will be overridden if other
+    /// useful contextual information is available.
+    ///
+    /// [`IfStatement`]: ContextType::IfStatement
+    /// [`BlockStatement`]: ContextType::BlockStatement
     pub fn is_useful(self) -> bool {
         !matches!(self, ContextType::BlockStatement)
     }

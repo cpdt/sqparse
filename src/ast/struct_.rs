@@ -1,7 +1,9 @@
 use crate::ast::{Identifier, Type, VarInitializer};
 use crate::token::Token;
 
-// `{` StructProperty+ `}`
+/// Anonymous declaration of a struct.
+///
+/// Grammar: `{` [StructProperty]* `}`
 #[derive(Debug, Clone)]
 pub struct StructDeclaration<'s> {
     pub open: &'s Token<'s>,
@@ -9,7 +11,9 @@ pub struct StructDeclaration<'s> {
     pub close: &'s Token<'s>,
 }
 
-// Type Identifier VarInitializer? `,`?
+/// Property of a struct in a [`StructDeclaration`].
+///
+/// Grammar: [Type] [Identifier] [VarInitializer]? `,`?
 #[derive(Debug, Clone)]
 pub struct StructProperty<'s> {
     pub ty: Type<'s>,

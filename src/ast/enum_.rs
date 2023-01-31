@@ -1,7 +1,11 @@
 use crate::ast::{Identifier, VarInitializer};
 use crate::token::Token;
 
-// Identifier VarInitializer? `,`?
+/// Entry in an [`EnumStatement`].
+///
+/// Grammar: [Identifier] [VarInitializer]? `,`?
+///
+/// [`EnumStatement`]: crate::ast::EnumStatement
 #[derive(Debug, Clone)]
 pub struct EnumEntry<'s> {
     pub name: Identifier<'s>,

@@ -2,7 +2,7 @@ use crate::ast::{
     ForDeclaration, ForeachIndex, Identifier, IfElse, Precedence, SwitchCase, SwitchCaseCondition,
     Type,
 };
-use crate::parser::combinator::{alt, alternative, prevent_ending_line};
+use crate::parser::combinator::{alt, alternative};
 use crate::parser::expression::expression;
 use crate::parser::identifier::identifier;
 use crate::parser::list::many;
@@ -92,8 +92,7 @@ pub fn foreach_index(tokens: TokenList) -> ParseResult<ForeachIndex> {
 }
 
 fn typed_foreach_index(tokens: TokenList) -> ParseResult<ForeachIndex> {
-    let (tokens, ty) =
-        prevent_ending_line(tokens, type_(tokens).map_err(|err| err.into_non_fatal()))?;
+    let (tokens, ty) = type_(tokens).map_err(|err| err.into_non_fatal())?;
     let (tokens, name) = identifier(tokens)?;
     let (tokens, comma) = terminal(tokens, TerminalToken::Comma)?;
     Ok((
@@ -124,8 +123,7 @@ pub fn foreach_value(tokens: TokenList) -> ParseResult<(Option<Type>, Identifier
 }
 
 fn typed_foreach_value(tokens: TokenList) -> ParseResult<(Option<Type>, Identifier, &Token)> {
-    let (tokens, ty) =
-        prevent_ending_line(tokens, type_(tokens).map_err(|err| err.into_non_fatal()))?;
+    let (tokens, ty) = type_(tokens).map_err(|err| err.into_non_fatal())?;
     let (tokens, name) = identifier(tokens)?;
     let (tokens, in_) = terminal(tokens, TerminalToken::In)?;
     Ok((tokens, (Some(ty), name, in_)))

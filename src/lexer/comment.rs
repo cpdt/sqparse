@@ -10,8 +10,8 @@ pub fn try_comment(val: ParseStr) -> Result<Option<(Comment, ParseStr)>, LexerEr
                 val.from(end_index + 2),
             ))),
             None => Err(LexerError::new(
-                val.end_offset()..val.end_offset(),
                 LexerErrorType::EndOfInputInsideComment,
+                val.end_offset()..val.end_offset(),
             )),
         };
     }

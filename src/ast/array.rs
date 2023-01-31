@@ -1,7 +1,9 @@
 use crate::ast::Expression;
 use crate::token::Token;
 
-// Expression `,`?
+/// Value in an array.
+///
+/// Grammar: [Expression] `,`?
 #[derive(Debug, Clone)]
 pub struct ArrayValue<'s> {
     pub value: Box<Expression<'s>>,

@@ -3,7 +3,9 @@ use crate::ast::{
 };
 use crate::token::Token;
 
-// FunctionEnvironment? `(` FunctionArgs `)` FunctionCaptures? Statement
+/// Anonymous function declaration in a function literal, function definition, class method, or table function.
+///
+/// Grammar: [FunctionEnvironment]? `(` [FunctionArgs] `)` [FunctionCaptures]? [Statement]
 #[derive(Debug, Clone)]
 pub struct FunctionDeclaration<'s> {
     pub environment: Option<FunctionEnvironment<'s>>,
@@ -14,7 +16,9 @@ pub struct FunctionDeclaration<'s> {
     pub body: Box<Statement<'s>>,
 }
 
-// `[` Expression `]`
+/// Environment that is bound to a [`FunctionDeclaration`].
+///
+/// Grammar: `[` [Expression] `]`
 #[derive(Debug, Clone)]
 pub struct FunctionEnvironment<'s> {
     pub open: &'s Token<'s>,
@@ -22,19 +26,24 @@ pub struct FunctionEnvironment<'s> {
     pub close: &'s Token<'s>,
 }
 
+/// Argument declarations in a [`FunctionDeclaration`].
 #[derive(Debug, Clone)]
 pub enum FunctionArgs<'s> {
-    // SeparatedListTrailing0<FunctionArg `,`>
+    /// Non-variable argument list.
+    ///
+    /// Grammar: [SeparatedListTrailing0]<[FunctionArg] `,`>
     NonVariable {
         args: SeparatedListTrailing0<'s, FunctionArg<'s>>,
     },
 
-    // `...`
-    EmptyVariable {
-        vararg: &'s Token<'s>,
-    },
+    /// Variable-length argument list with no named arguments.
+    ///
+    /// Grammar: `...`
+    EmptyVariable { vararg: &'s Token<'s> },
 
-    // SeparatedList1<FunctionArg `,`> `,` `...`
+    /// Variable-length argument list with some named arguments.
+    ///
+    /// Grammar: [SeparatedList1]<[FunctionArg] `,`> `,` `...`
     NonEmptyVariable {
         args: SeparatedList1<'s, FunctionArg<'s>>,
         comma: &'s Token<'s>,
@@ -42,7 +51,9 @@ pub enum FunctionArgs<'s> {
     },
 }
 
-// Type? Identifier VarInitializer?
+/// Argument declaration in a [`FunctionArgs`] list.
+///
+/// Grammar: [Type]? [Identifier] [VarInitializer]?
 #[derive(Debug, Clone)]
 pub struct FunctionArg<'s> {
     pub ty: Option<Type<'s>>,
@@ -50,7 +61,9 @@ pub struct FunctionArg<'s> {
     pub initializer: Option<VarInitializer<'s>>,
 }
 
-// `:` `(` SeparatedListTrailing0<Identifier `,`> `)`
+/// List of captured variables (aka free variables) in a [`FunctionDeclaration`].
+///
+/// Grammar: `:` `(` [SeparatedListTrailing0]<[Identifier] `,`> `)`
 #[derive(Debug, Clone)]
 pub struct FunctionCaptures<'s> {
     pub colon: &'s Token<'s>,
@@ -59,7 +72,11 @@ pub struct FunctionCaptures<'s> {
     pub close: &'s Token<'s>,
 }
 
-// Type Identifier? VarInitializer?
+/// Argument declaration in a [`FunctionRefType`].
+///
+/// Grammar: [Type] [Identifier]? [VarInitializer]?
+///
+/// [`FunctionRefType`]: crate::ast::FunctionRefType
 #[derive(Debug, Clone)]
 pub struct FunctionRefArg<'s> {
     pub ty: Type<'s>,

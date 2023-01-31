@@ -3,33 +3,125 @@ use crate::token::TerminalToken;
 use crate::{display_error, TokenItem};
 use std::ops::Range;
 
+/// Type of [`ParseError`].
+///
+/// Implements [`std::fmt::Display`] to write a useful error message.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ParseErrorType {
+    /// An internal unexpected error occurred. This is a bug.
     Internal(InternalErrorType),
+
+    /// Expected a specific terminal token but got something else.
+    ///
+    /// # Example
+    /// ```text
+    /// function MyFunc { }
+    ///                 ^ error
+    /// ```
     ExpectedTerminal(TerminalToken),
+
+    /// Expected a specific compound terminal but got something else.
     ExpectedCompound2(TerminalToken, TerminalToken),
+
+    /// Expected a specific compound terminal but got something else.
     ExpectedCompound3(TerminalToken, TerminalToken, TerminalToken),
+
+    /// Expected an identifier but got something else.
+    ///
+    /// # Example
+    /// ```text
+    /// global var !?!?! = "guh??"
+    ///            ^ error
+    /// ```
     ExpectedIdentifier,
+
+    /// Expected a literal but got something else.
     ExpectedLiteral,
 
+    /// Expected a token that starts an expression but got something else.
+    ///
+    /// # Example
+    /// ```text
+    /// int What = globalize_all_functions
+    ///            ^ error
+    /// ```
     ExpectedExpression,
+
+    /// Expected an operator but got something else.
     ExpectedOperator,
+
+    /// Expected a prefix operator but got something else.
     ExpectedPrefixOperator,
+
+    /// Expected a postfix operator but got something else.
     ExpectedPostfixOperator,
+
+    /// Expected a binary operator but got something else.
     ExpectedBinaryOperator,
 
+    /// Expected a type but got something else.
+    ///
+    /// # Example
+    /// ```text
+    /// typedef Five 5
+    ///              ^ error
+    /// ```
     ExpectedType,
+
+    /// Expected a type modifier but got something else.
+    ///
+    /// # Example
+    /// ```text
+    /// typedef help table&-
+    ///                    ^ error
+    /// ```
     ExpectedTypeModifier,
 
+    /// Expected a token that starts a table slot but got something else.
+    ///
+    /// # Example
+    /// ```text
+    /// my_table = {
+    ///     class MyTableClass {}
+    ///     ^ error
+    /// }
+    /// ```
     ExpectedTableSlot,
+
+    /// Expected a token that starts a class member but got something else.
+    ///
+    /// # Example
+    /// ```text
+    /// class MyClass {
+    ///     globalize_all_functions
+    ///     ^ error
+    /// }
+    /// ```
     ExpectedClassMember,
 
+    /// Expected a token that starts a statement but got something else.
+    ///
+    /// # Example
+    /// ```text
+    /// > hey
+    /// ^ error
+    /// ```
     ExpectedStatement,
+
+    /// Expected a token that starts a global declaration but got something else.
+    ///
+    /// # Example
+    /// ```text
+    /// global if ()
+    ///        ^ error
+    /// ```
     ExpectedGlobalDeclaration,
 
+    /// Found a linebreak in a place where one is not allowed.
     IllegalLineBreak,
 }
 
+/// An internal unexpected error occurred. If you get one of these, it's a bug.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum InternalErrorType {
     TokenIsNotSpan,
@@ -38,21 +130,58 @@ pub enum InternalErrorType {
     Empty,
 }
 
+/// An error emitted while trying to parse a token list.
+///
+/// Each error has a type with more information, the token where the error occurred, and possibly
+/// some contextual information.
 #[derive(Debug, Clone)]
 pub struct ParseError {
+    /// The type of error.
     pub ty: ParseErrorType,
+
+    /// The index of the token where the error occurred.
     pub token_index: usize,
+
+    /// Contextual information if available.
     pub context: Option<ParseErrorContext>,
-    pub is_fatal: bool,
+
+    pub(crate) is_fatal: bool,
 }
 
+/// Context attached to a [`ParseError`].
+///
+/// This is generally attached to an error when the parser knows the context of what it is parsing
+/// with confidence.
+///
+/// # Example
+/// In this code, the parser knows that it is parsing the RHS of an expression when the error
+/// occurs.
+/// ```text
+/// 1 + function
+///     ^ error
+/// ```
+/// So it will attach a context to the error with a [`ExpressionRightHandSide`] context.
+///
+/// [`ExpressionRightHandSide`]: ContextType::ExpressionRightHandSide
 #[derive(Debug, Clone)]
 pub struct ParseErrorContext {
+    /// The range of tokens that this context applies.
+    ///
+    /// For example, if the context is a [`FunctionDeclarationStatement`], the range will include
+    /// the entire function.
+    ///
+    /// In some cases this will end at the token where the error is encountered, however in many
+    /// cases the parser can match delimiters like `{` and `}` to provide more context.
+    ///
+    /// [`FunctionDeclarationStatement`]: crate::ast::FunctionDeclarationStatement
     pub token_range: Range<usize>,
+
+    /// The type of context.
     pub ty: ContextType,
 }
 
 impl ParseError {
+    /// Creates a new `ParseError`.
     pub fn new(ty: ParseErrorType, token_index: usize) -> Self {
         ParseError {
             ty,
@@ -62,6 +191,10 @@ impl ParseError {
         }
     }
 
+    /// Attaches some context to the error.
+    ///
+    /// If the error already has context attached, it will only be replaced if the new context
+    /// is deemed more useful, based on [`ContextType::is_useful`].
     pub fn with_context(mut self, token_range: Range<usize>, ty: ContextType) -> Self {
         let replace = match &self.context {
             Some(context) => !context.ty.is_useful(),
@@ -80,16 +213,8 @@ impl ParseError {
         self
     }
 
-    pub fn into_fatal(mut self) -> Self {
-        self.is_fatal = true;
-        self
-    }
-
-    pub fn into_non_fatal(mut self) -> Self {
-        self.is_fatal = false;
-        self
-    }
-
+    /// Returns an implementation of [`std::fmt::Display`] that pretty-prints the error and context
+    /// using [`display_error`].
     pub fn display<'s>(
         &'s self,
         source: &'s str,
@@ -100,6 +225,16 @@ impl ParseError {
             source,
             tokens,
         }
+    }
+
+    pub(crate) fn into_fatal(mut self) -> Self {
+        self.is_fatal = true;
+        self
+    }
+
+    pub(crate) fn into_non_fatal(mut self) -> Self {
+        self.is_fatal = false;
+        self
     }
 }
 

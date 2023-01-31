@@ -547,7 +547,7 @@ fn typed_const_statement<'s>(
     tokens: TokenList<'s>,
     const_: &'s Token<'s>,
 ) -> ParseResult<'s, ConstStatement<'s>> {
-    let (tokens, const_type) = prevent_ending_line(tokens, type_(tokens))?;
+    let (tokens, const_type) = type_(tokens)?;
     let (tokens, name) = identifier(tokens)?;
     let (tokens, initializer) = var_initializer(tokens)?;
     Ok((

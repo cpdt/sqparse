@@ -13,9 +13,22 @@ mod token_iter;
 
 pub use self::error::{LexerError, LexerErrorType};
 
+/// A token with attached metadata.
 #[derive(Debug, Clone, PartialEq)]
 pub struct TokenItem<'s> {
+    /// The actual token.
     pub token: Token<'s>,
+
+    /// The index of the corresponding closing delimiter token, if this token is an opening
+    /// delimiter.
+    ///
+    /// # Example
+    /// ```text
+    /// { some other tokens }
+    /// ^ open              ^ close
+    /// ```
+    /// In this example, the opening `{` token would have a `close_index` of 5, the index of the
+    /// closing delimiter.
     pub close_index: Option<usize>,
 }
 
@@ -43,6 +56,27 @@ struct Layer<'s> {
     close_ty: TokenType<'s>,
 }
 
+/// Parses an input string into a list of tokens.
+///
+/// # Example
+/// ```
+/// use sqparse::{Flavor, tokenize};
+///
+/// let source = r#"
+/// global function MyFunction
+///
+/// struct {
+///     int a
+/// } file
+///
+/// string function MyFunction( List<number> values ) {
+///     values.push(1 + 2)
+/// }
+/// "#;
+///
+/// let tokens = tokenize(source, Flavor::SquirrelRespawn).unwrap();
+/// assert_eq!(tokens.len(), 29);
+/// ```
 pub fn tokenize(val: &str, flavor: Flavor) -> Result<Vec<TokenItem>, LexerError> {
     let mut items = Vec::<TokenItem>::new();
     let mut layers = VecDeque::<Layer>::new();
@@ -80,11 +114,11 @@ pub fn tokenize(val: &str, flavor: Flavor) -> Result<Vec<TokenItem>, LexerError>
         Some(layer) => {
             let open_token = &items[layer.open_index].token;
             Err(LexerError::new(
-                open_token.range.clone(),
                 LexerErrorType::UnmatchedOpener {
                     open: open_token.ty,
                     close: layer.close_ty,
                 },
+                open_token.range.clone(),
             ))
         }
     }

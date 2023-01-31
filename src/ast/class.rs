@@ -4,7 +4,9 @@ use crate::ast::{
 };
 use crate::token::Token;
 
-// ClassExtends? `{` ClassMember+ `}`
+/// Anonymous declaration of a class.
+///
+/// Grammar: [ClassExtends]? `{` [ClassMember]* `}`
 #[derive(Debug, Clone)]
 pub struct ClassDeclaration<'s> {
     pub extends: Option<ClassExtends<'s>>,
@@ -13,24 +15,32 @@ pub struct ClassDeclaration<'s> {
     pub close: &'s Token<'s>,
 }
 
-// `extends` Expression
+/// Optional extends part of [`ClassDeclaration`].
+///
+/// Grammar: `extends` [Expression]
 #[derive(Debug, Clone)]
 pub struct ClassExtends<'s> {
     pub extends: &'s Token<'s>,
     pub name: Box<Expression<'s>>,
 }
 
-// ClassMemberAttributes? ClassMemberType
-// ClassMemberAttributes = `</` TableSlot+ `/>`
+/// Member of a [`ClassDeclaration`] with an optional attribute table.
+///
+/// Grammar: (`</` [TableSlot]+ `/>`)? [ClassMemberType]
+///
+/// [TableSlot]: crate::ast::TableSlot
 #[derive(Debug, Clone)]
 pub struct ClassMember<'s> {
     pub attributes: Option<TableExpression<'s>>,
     pub ty: ClassMemberType<'s>,
 }
 
+/// Member of a [`ClassDeclaration`].
 #[derive(Debug, Clone)]
 pub enum ClassMemberType<'s> {
-    // `static`? Identifier `=` Expression `;`?
+    /// Class property.
+    ///
+    /// Grammar: `static`? [Identifier] `=` [Expression] `;`?
     Property {
         static_: Option<&'s Token<'s>>,
         name: Identifier<'s>,
@@ -38,7 +48,9 @@ pub enum ClassMemberType<'s> {
         semicolon: Option<&'s Token<'s>>,
     },
 
-    // `static`? `[` Expression `]` `=` Expression `;`?
+    /// Computed class property.
+    ///
+    /// Grammar: `static`? `[` [Expression] `]` `=` [Expression] `;`?
     ComputedProperty {
         static_: Option<&'s Token<'s>>,
         open: &'s Token<'s>,
@@ -48,13 +60,17 @@ pub enum ClassMemberType<'s> {
         semicolon: Option<&'s Token<'s>>,
     },
 
-    // `constructor` FunctionDeclaration
+    /// Class constructor.
+    ///
+    /// Grammar: `constructor` [FunctionDeclaration]
     Constructor {
         constructor: &'s Token<'s>,
         declaration: Box<FunctionDeclaration<'s>>,
     },
 
-    // Type? `function` IdentifierOrConstructor FunctionDeclaration
+    /// Class method.
+    ///
+    /// Grammar: [Type]? `function` [MethodIdentifier] [FunctionDeclaration]
     Function {
         return_type: Option<Type<'s>>,
         function: &'s Token<'s>,

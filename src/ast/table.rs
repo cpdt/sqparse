@@ -3,22 +3,33 @@ use crate::ast::{
 };
 use crate::token::Token;
 
-// TableSlotType `,`?
+/// Slot in a [`TableExpression`] with an optional separator.
+///
+/// Grammar: [TableSlotType] `,`?
+///
+/// [`TableExpression`]: crate::ast::TableExpression
 #[derive(Debug, Clone)]
 pub struct TableSlot<'s> {
     pub ty: TableSlotType<'s>,
     pub separator: Option<&'s Token<'s>>,
 }
 
+/// Slot in a [`TableExpression`].
+///
+/// [`TableExpression`]: crate::ast::TableExpression
 #[derive(Debug, Clone)]
 pub enum TableSlotType<'s> {
-    // Identifier VarInitializer
+    /// Property slot.
+    ///
+    /// Grammar: [Identifier] [VarInitializer]
     Property {
         name: Identifier<'s>,
         initializer: VarInitializer<'s>,
     },
 
-    // `[` Expression `]` VarInitializer
+    /// Computed property slot.
+    ///
+    /// Grammar: `[` [Expression] `]` [VarInitializer]
     ComputedProperty {
         open: &'s Token<'s>,
         name: Box<Expression<'s>>,
@@ -26,14 +37,18 @@ pub enum TableSlotType<'s> {
         initializer: VarInitializer<'s>,
     },
 
-    // LiteralExpression `:` Expression
+    /// JSON property slot.
+    ///
+    /// Grammar: [LiteralExpression] `:` [Expression]
     JsonProperty {
         name: LiteralExpression<'s>,
         colon: &'s Token<'s>,
         value: Box<Expression<'s>>,
     },
 
-    // Type? `function` Identifier FunctionDeclaration
+    /// Function slot.
+    ///
+    /// Grammar: [Type]? `function` [Identifier] [FunctionDeclaration]
     Function {
         return_type: Option<Type<'s>>,
         function: &'s Token<'s>,

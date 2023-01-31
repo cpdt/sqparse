@@ -110,8 +110,8 @@ fn try_string_val(
             Some(val) => val,
             None => {
                 return Err(LexerError::new(
-                    val.end_offset()..val.end_offset(),
                     LexerErrorType::EndOfInputInsideString,
+                    val.end_offset()..val.end_offset(),
                 ));
             }
         };
@@ -120,8 +120,8 @@ fn try_string_val(
         if !is_verbatim && next_char == '\n' {
             let newline_offset = val.start_offset() + next_index;
             return Err(LexerError::new(
-                newline_offset..newline_offset,
                 LexerErrorType::EndOfLineInsideString,
+                newline_offset..newline_offset,
             ));
         }
 

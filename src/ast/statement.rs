@@ -5,13 +5,19 @@ use crate::ast::{
 };
 use crate::token::Token;
 
-// StatementType `;`?
+/// A statement.
+///
+/// A Squirrel program is made up of a list of statements. Statements are either separated by
+/// semicolons (`;`) or newlines.
+///
+/// Grammar: [StatementType] `;`?
 #[derive(Debug, Clone)]
 pub struct Statement<'s> {
     pub ty: StatementType<'s>,
     pub end: Option<&'s Token<'s>>,
 }
 
+/// A statement, excluding a trailing semicolon.
 #[derive(Debug, Clone)]
 pub enum StatementType<'s> {
     Empty(EmptyStatement<'s>),
@@ -48,13 +54,17 @@ pub enum StatementType<'s> {
     Untyped(UntypedStatement<'s>),
 }
 
-// <empty>?
+/// An empty statement.
+///
+/// Grammar: &lt;empty>?
 #[derive(Debug, Clone)]
 pub struct EmptyStatement<'s> {
     pub empty: Option<&'s Token<'s>>,
 }
 
-// `{` Statement+ `}`
+/// A block statement.
+///
+/// Grammar: `{` [Statement]+ `}`
 #[derive(Debug, Clone)]
 pub struct BlockStatement<'s> {
     pub open: &'s Token<'s>,
@@ -62,7 +72,9 @@ pub struct BlockStatement<'s> {
     pub close: &'s Token<'s>,
 }
 
-// `if` `(` Expression `)` Statement IfElse?
+/// An `if` statement, with an optional `else` block.
+///
+/// Grammar: `if` `(` [Expression] `)` [Statement] [IfElse]?
 #[derive(Debug, Clone)]
 pub struct IfStatement<'s> {
     pub if_: &'s Token<'s>,
@@ -73,7 +85,9 @@ pub struct IfStatement<'s> {
     pub else_: Option<IfElse<'s>>,
 }
 
-// `while` `(` Expression `)` Statement
+/// A `while` statement.
+///
+/// Grammar: `while` `(` [Expression] `)` [Statement]
 #[derive(Debug, Clone)]
 pub struct WhileStatement<'s> {
     pub while_: &'s Token<'s>,
@@ -83,7 +97,9 @@ pub struct WhileStatement<'s> {
     pub body: Box<Statement<'s>>,
 }
 
-// `do` Statement `while` `(` Expression `)`
+/// A `do-while` statement.
+///
+/// Grammar: `do` [Statement] `while` `(` [Expression] `)`
 #[derive(Debug, Clone)]
 pub struct DoWhileStatement<'s> {
     pub do_: &'s Token<'s>,
@@ -94,7 +110,9 @@ pub struct DoWhileStatement<'s> {
     pub close: &'s Token<'s>,
 }
 
-// `switch` `(` Expression `)` `{` SwitchCase+ `}`
+/// A `switch` statement.
+///
+/// Grammar: `switch` `(` [Expression] `)` `{` [SwitchCase]* `}`
 #[derive(Debug, Clone)]
 pub struct SwitchStatement<'s> {
     pub switch: &'s Token<'s>,
@@ -106,7 +124,9 @@ pub struct SwitchStatement<'s> {
     pub close_cases: &'s Token<'s>,
 }
 
-// `for` `(` ForDeclaration? `;` Expression? `;` Expression? `)` Statement
+/// A `for` loop statement.
+///
+/// Grammar: `for` `(` [ForDeclaration]? `;` [Expression]? `;` [Expression]? `)` [Statement]
 #[derive(Debug, Clone)]
 pub struct ForStatement<'s> {
     pub for_: &'s Token<'s>,
@@ -120,7 +140,9 @@ pub struct ForStatement<'s> {
     pub body: Box<Statement<'s>>,
 }
 
-// `foreach` `(` ForeachIndex? Type? Identifier `in` Expression `)` Statement
+/// A `foreach` loop statement.
+///
+/// Grammar: `foreach` `(` [ForeachIndex]? [Type]? [Identifier] `in` [Expression] `)` [Statement]
 #[derive(Debug, Clone)]
 pub struct ForeachStatement<'s> {
     pub foreach: &'s Token<'s>,
@@ -134,40 +156,52 @@ pub struct ForeachStatement<'s> {
     pub body: Box<Statement<'s>>,
 }
 
-// `break`
+/// A `break` statement.
+///
+/// Grammar: `break`
 #[derive(Debug, Clone)]
 pub struct BreakStatement<'s> {
     pub break_: &'s Token<'s>,
 }
 
-// `continue`
+/// A `continue` statement.
+///
+/// Grammar: `continue`
 #[derive(Debug, Clone)]
 pub struct ContinueStatement<'s> {
     pub continue_: &'s Token<'s>,
 }
 
-// `return` Expression?
+/// A `return` statement.
+///
+/// Grammar: `return` [Expression]?
 #[derive(Debug, Clone)]
 pub struct ReturnStatement<'s> {
     pub return_: &'s Token<'s>,
     pub value: Option<Box<Expression<'s>>>,
 }
 
-// `yield` Expression?
+/// A `yield` statement.
+///
+/// Grammar: `yield` [Expression]?
 #[derive(Debug, Clone)]
 pub struct YieldStatement<'s> {
     pub yield_: &'s Token<'s>,
     pub value: Option<Box<Expression<'s>>>,
 }
 
-// Type SeparatedListTrailing1<VarDeclaration `,`>
+/// A variable declaration statement.
+///
+/// Grammar: [Type] [SeparatedListTrailing1]<[VarDeclaration] `,`>
 #[derive(Debug, Clone)]
 pub struct VarDeclarationStatement<'s> {
     pub ty: Type<'s>,
     pub declarations: SeparatedListTrailing1<'s, VarDeclaration<'s>>,
 }
 
-// `function` (Identifier `::`)+ `constructor` FunctionDeclaration
+/// An out-of-band constructor declaration statement.
+///
+/// Grammar: `function` ([Identifier] `::`)* `constructor` [FunctionDeclaration]
 #[derive(Debug, Clone)]
 pub struct ConstructorDeclarationStatement<'s> {
     pub function: &'s Token<'s>,
@@ -178,7 +212,9 @@ pub struct ConstructorDeclarationStatement<'s> {
     pub declaration: FunctionDeclaration<'s>,
 }
 
-// Type? `function` SeparatedList1<Identifier `::`> FunctionDeclaration
+/// A function declaration statement.
+///
+/// Grammar: [Type]? `function` [SeparatedList1]<[Identifier] `::`> [FunctionDeclaration]
 #[derive(Debug, Clone)]
 pub struct FunctionDeclarationStatement<'s> {
     pub return_type: Option<Type<'s>>,
@@ -187,7 +223,9 @@ pub struct FunctionDeclarationStatement<'s> {
     pub declaration: FunctionDeclaration<'s>,
 }
 
-// `class` Expression ClassDeclaration
+/// A class declaration statement.
+///
+/// Grammar: `class` [Expression] [ClassDeclaration]
 #[derive(Debug, Clone)]
 pub struct ClassDeclarationStatement<'s> {
     pub class: &'s Token<'s>,
@@ -195,7 +233,9 @@ pub struct ClassDeclarationStatement<'s> {
     pub declaration: ClassDeclaration<'s>,
 }
 
-// `try` Statement `catch` `(` Identifier `)` Statement
+/// A `try-catch` statement.
+///
+/// Grammar: `try` [Statement] `catch` `(` [Identifier] `)` [Statement]
 #[derive(Debug, Clone)]
 pub struct TryCatchStatement<'s> {
     pub try_: &'s Token<'s>,
@@ -207,14 +247,18 @@ pub struct TryCatchStatement<'s> {
     pub catch_body: Box<Statement<'s>>,
 }
 
-// `throw` Expression
+/// A `throw` statement.
+///
+/// Grammar: `throw` [Expression]
 #[derive(Debug, Clone)]
 pub struct ThrowStatement<'s> {
     pub throw: &'s Token<'s>,
     pub value: Box<Expression<'s>>,
 }
 
-// `const` Type? Identifier VarInitializer
+/// A `const` declaration statement.
+///
+/// Grammar: `const` [Type]? [Identifier] [VarInitializer]
 #[derive(Debug, Clone)]
 pub struct ConstStatement<'s> {
     pub const_: &'s Token<'s>,
@@ -223,7 +267,9 @@ pub struct ConstStatement<'s> {
     pub initializer: VarInitializer<'s>,
 }
 
-// `enum` Identifier `{` EnumEntry+ `}`
+/// An `enum` declaration statement.
+///
+/// Grammar: `enum` [Identifier] `{` [EnumEntry]* `}`
 #[derive(Debug, Clone)]
 pub struct EnumStatement<'s> {
     pub enum_: &'s Token<'s>,
@@ -233,20 +279,26 @@ pub struct EnumStatement<'s> {
     pub close: &'s Token<'s>,
 }
 
-// Expression
+/// An expression statement.
+///
+/// Grammar: [Expression]
 #[derive(Debug, Clone)]
 pub struct ExpressionStatement<'s> {
     pub value: Box<Expression<'s>>,
 }
 
-// `thread` Expression
+/// A `thread` statement.
+///
+/// Grammar: `thread` [Expression]
 #[derive(Debug, Clone)]
 pub struct ThreadStatement<'s> {
     pub thread: &'s Token<'s>,
     pub value: Box<Expression<'s>>,
 }
 
-// `delaythread` `(` Expression `)` Expression
+/// A `delaythread` statement.
+///
+/// Grammar: `delaythread` `(` [Expression] `)` [Expression]
 #[derive(Debug, Clone)]
 pub struct DelayThreadStatement<'s> {
     pub delay_thread: &'s Token<'s>,
@@ -256,21 +308,27 @@ pub struct DelayThreadStatement<'s> {
     pub value: Box<Expression<'s>>,
 }
 
-// `waitthread` Expression
+/// A `waitthread` statement.
+///
+/// Grammar: `waitthread` [Expression]
 #[derive(Debug, Clone)]
 pub struct WaitThreadStatement<'s> {
     pub wait_thread: &'s Token<'s>,
     pub value: Box<Expression<'s>>,
 }
 
-// `wait` Expression
+/// A `wait` statement.
+///
+/// Grammar: `wait` [Expression]
 #[derive(Debug, Clone)]
 pub struct WaitStatement<'s> {
     pub wait: &'s Token<'s>,
     pub value: Box<Expression<'s>>,
 }
 
-// `struct` Identifier StructDeclaration
+/// A struct declaration statement.
+///
+/// Grammar: `struct` [Identifier] [StructDeclaration]
 #[derive(Debug, Clone)]
 pub struct StructDeclarationStatement<'s> {
     pub struct_: &'s Token<'s>,
@@ -278,7 +336,9 @@ pub struct StructDeclarationStatement<'s> {
     pub declaration: StructDeclaration<'s>,
 }
 
-// `typedef` Identifier Type
+/// A type definition statement.
+///
+/// Grammar: `typedef` [Identifier] [Type]
 #[derive(Debug, Clone)]
 pub struct TypedefStatement<'s> {
     pub typedef: &'s Token<'s>,
@@ -286,20 +346,26 @@ pub struct TypedefStatement<'s> {
     pub ty: Type<'s>,
 }
 
-// `global` GlobalDeclaration
+/// A global declaration statement.
+///
+/// Grammar: `global` [GlobalDeclaration]
 #[derive(Debug, Clone)]
 pub struct GlobalStatement<'s> {
     pub global: &'s Token<'s>,
     pub declaration: GlobalDeclaration<'s>,
 }
 
-// `globalize_all_functions`
+/// A `globalize_all_functions` statement.
+///
+/// Grammar: `globalize_all_functions`
 #[derive(Debug, Clone)]
 pub struct GlobalizeAllFunctionsStatement<'s> {
     pub globalize_all_functions: &'s Token<'s>,
 }
 
-// `untyped`
+/// An `untyped` statement.
+///
+/// Grammar: `untyped`
 #[derive(Debug, Clone)]
 pub struct UntypedStatement<'s> {
     pub untyped: &'s Token<'s>,

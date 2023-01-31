@@ -91,8 +91,8 @@ impl<'s> Iterator for TokenIter<'s> {
             } else {
                 // Not a newline, not a comment, not a token.
                 return Some(Err(LexerError::new(
-                    self.val.start_offset()..self.val.start_offset(),
                     LexerErrorType::InvalidInput,
+                    self.val.start_offset()..self.val.start_offset(),
                 )));
             }
         }

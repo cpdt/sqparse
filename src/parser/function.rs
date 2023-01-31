@@ -2,7 +2,7 @@ use crate::ast::{
     FunctionArg, FunctionArgs, FunctionCaptures, FunctionDeclaration, FunctionEnvironment,
     FunctionRefArg, Precedence, SeparatedList1,
 };
-use crate::parser::combinator::{alt, alternative, opt, prevent_ending_line, span};
+use crate::parser::combinator::{alt, alternative, opt, span};
 use crate::parser::expression::expression;
 use crate::parser::identifier::identifier;
 use crate::parser::list::separated_list_trailing0;
@@ -100,7 +100,7 @@ pub fn function_arg(tokens: TokenList) -> ParseResult<FunctionArg> {
 }
 
 fn typed_function_arg(tokens: TokenList) -> ParseResult<FunctionArg> {
-    let (tokens, ty) = prevent_ending_line(tokens, type_(tokens))?;
+    let (tokens, ty) = type_(tokens)?;
     let (tokens, name) = identifier(tokens)?;
     let (tokens, initializer) = opt(tokens, var_initializer(tokens))?;
 

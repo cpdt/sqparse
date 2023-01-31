@@ -1,3 +1,11 @@
+//! Abstract syntax tree definitions outputted by the parser.
+//!
+//! The "root" node in a tree is usually a [`Program`].
+//!
+//! A program contains [`Statement`]s.
+//!
+//! A statement may contain [`Expression`]s and [`Type`]s.
+
 mod array;
 mod class;
 mod control;
@@ -32,6 +40,9 @@ pub use self::table::*;
 pub use self::type_::*;
 pub use self::variable::*;
 
+/// Contains statements that form a program.
+///
+/// Grammar: [Statement]*
 #[derive(Debug, Clone)]
 pub struct Program<'s> {
     pub statements: Vec<Statement<'s>>,

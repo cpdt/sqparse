@@ -1,5 +1,5 @@
 use crate::ast::{Precedence, TableSlot, TableSlotType};
-use crate::parser::combinator::{alternative, first_of, opt, prevent_ending_line, span};
+use crate::parser::combinator::{alternative, first_of, opt, span};
 use crate::parser::expression::{expression, literal};
 use crate::parser::function::function_declaration;
 use crate::parser::identifier::identifier;
@@ -102,7 +102,7 @@ fn function_table_slot(tokens: TokenList) -> ParseResult<TableSlotType> {
         tokens,
         ContextType::FunctionTableSlot,
         |tokens| {
-            let (tokens, return_type) = prevent_ending_line(tokens, opt(tokens, type_(tokens)))?;
+            let (tokens, return_type) = opt(tokens, type_(tokens))?;
             let (tokens, function) = terminal(tokens, TerminalToken::Function)?;
             Ok((tokens, (return_type, function)))
         },

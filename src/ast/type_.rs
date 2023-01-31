@@ -4,6 +4,19 @@ use crate::ast::{
 };
 use crate::token::Token;
 
+/// A type.
+///
+/// Many types are recursive, containing other types. Unlike [expressions] types do not have
+/// precedence, and are all left-associative.
+///
+/// This means you can always decompose a type like this:
+/// ```text
+/// table<int>& ornull
+/// ^    ^^^^^^^^^^^^^ modifier types
+/// | base type
+/// ```
+///
+/// [expressions]: Expression
 #[derive(Debug, Clone)]
 pub enum Type<'s> {
     Local(LocalType<'s>),
@@ -17,32 +30,42 @@ pub enum Type<'s> {
     Nullable(NullableType<'s>),
 }
 
-// `local`
+/// A `local` type.
+///
+/// Grammar: `local`
 #[derive(Debug, Clone)]
 pub struct LocalType<'s> {
     pub local: &'s Token<'s>,
 }
 
-// `var`
+/// A `var` type.
+///
+/// Grammar: `var`
 #[derive(Debug, Clone)]
 pub struct VarType<'s> {
     pub var: &'s Token<'s>,
 }
 
-// Identifier
+/// A named type.
+///
+/// Grammar: [Identifier]
 #[derive(Debug, Clone)]
 pub struct PlainType<'s> {
     pub name: Identifier<'s>,
 }
 
-// `struct` StructDeclaration
+/// An anonymous struct type.
+///
+/// Grammar: `struct` [StructDeclaration]
 #[derive(Debug, Clone)]
 pub struct StructType<'s> {
     pub struct_: &'s Token<'s>,
     pub declaration: StructDeclaration<'s>,
 }
 
-// Type `[` Expression `]`
+/// An array type.
+///
+/// Grammar: [Type] `[` [Expression] `]`
 #[derive(Debug, Clone)]
 pub struct ArrayType<'s> {
     pub base: Box<Type<'s>>,
@@ -51,7 +74,9 @@ pub struct ArrayType<'s> {
     pub close: &'s Token<'s>,
 }
 
-// Type `<` SeparatedListTrailing1<Type `,`> `>`
+/// A generic type.
+///
+/// Grammar: [Type] `<` [SeparatedListTrailing1]<[Type] `,`> `>`
 #[derive(Debug, Clone)]
 pub struct GenericType<'s> {
     pub base: Box<Type<'s>>,
@@ -60,7 +85,9 @@ pub struct GenericType<'s> {
     pub close: &'s Token<'s>,
 }
 
-// Type? `functionref` `(` SeparatedListTrailing0<FunctionRefArg `,`> `)`
+/// A function reference type.
+///
+/// Grammar: [Type]? `functionref` `(` [SeparatedListTrailing0]<[FunctionRefArg] `,`> `)`
 #[derive(Debug, Clone)]
 pub struct FunctionRefType<'s> {
     pub return_type: Option<Box<Type<'s>>>,
@@ -70,14 +97,18 @@ pub struct FunctionRefType<'s> {
     pub close: &'s Token<'s>,
 }
 
-// Type `&`
+/// A reference type.
+///
+/// Grammar: [Type] `&`
 #[derive(Debug, Clone)]
 pub struct ReferenceType<'s> {
     pub base: Box<Type<'s>>,
     pub reference: &'s Token<'s>,
 }
 
-// Type `ornull`
+/// A nullable type.
+///
+/// Grammar: [Type] `ornull`
 #[derive(Debug, Clone)]
 pub struct NullableType<'s> {
     pub base: Box<Type<'s>>,
