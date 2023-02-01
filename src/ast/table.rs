@@ -46,6 +46,17 @@ pub enum TableSlotType<'s> {
         value: Box<Expression<'s>>,
     },
 
+    /// Constructor slot.
+    ///
+    /// This is technically valid due to a quirk in the vanilla Squirrel parser, but it's just
+    /// treated as a function named `constructor`.
+    ///
+    /// Grammar: `constructor` [FunctionDeclaration]
+    Constructor {
+        constructor: &'s Token<'s>,
+        declaration: Box<FunctionDeclaration<'s>>,
+    },
+
     /// Function slot.
     ///
     /// Grammar: [Type]? `function` [Identifier] [FunctionDeclaration]

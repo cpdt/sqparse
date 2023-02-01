@@ -24,6 +24,7 @@ fn table_slot_type(tokens: TokenList) -> ParseResult<TableSlotType> {
             property_table_slot,
             computed_property_table_slot,
             json_property_table_slot,
+            constructor_table_slot,
         ],
         |_| {
             Err(ParseError::new(
@@ -94,6 +95,24 @@ fn json_property_table_slot(tokens: TokenList) -> ParseResult<TableSlotType> {
                 },
             ))
         },
+    )
+}
+
+fn constructor_table_slot(tokens: TokenList) -> ParseResult<TableSlotType> {
+    alternative(
+        tokens,
+        ContextType::FunctionTableSlot,
+        |tokens| terminal(tokens, TerminalToken::Constructor),
+        |tokens, constructor| {
+            let (tokens, declaration) = function_declaration(tokens)?;
+            Ok((
+                tokens,
+                TableSlotType::Constructor {
+                    constructor,
+                    declaration: Box::new(declaration),
+                }
+            ))
+        }
     )
 }
 
