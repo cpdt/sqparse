@@ -1,5 +1,5 @@
 use crate::ast::{ClassDeclaration, ClassExtends, ClassMember, ClassMemberType, Precedence};
-use crate::parser::combinator::{alternative, first_of, opt, span};
+use crate::parser::combinator::{definitely, first_of, opt, span};
 use crate::parser::expression::{expression, table_delimited};
 use crate::parser::function::function_declaration;
 use crate::parser::identifier::{identifier, method_identifier};
@@ -33,7 +33,7 @@ pub fn class_declaration(tokens: TokenList) -> ParseResult<ClassDeclaration> {
 }
 
 pub fn class_extends(tokens: TokenList) -> ParseResult<ClassExtends> {
-    alternative(
+    definitely(
         tokens,
         ContextType::ClassExtends,
         |tokens| terminal(tokens, TerminalToken::Extends),
@@ -83,7 +83,7 @@ fn class_member_type(tokens: TokenList) -> ParseResult<ClassMemberType> {
 }
 
 fn property_class_member(tokens: TokenList) -> ParseResult<ClassMemberType> {
-    alternative(
+    definitely(
         tokens,
         ContextType::PropertyClassMember,
         |tokens| {
@@ -108,7 +108,7 @@ fn property_class_member(tokens: TokenList) -> ParseResult<ClassMemberType> {
 }
 
 fn computed_property_class_member(tokens: TokenList) -> ParseResult<ClassMemberType> {
-    alternative(
+    definitely(
         tokens,
         ContextType::ComputedPropertyClassMember,
         |tokens| {
@@ -143,7 +143,7 @@ fn computed_property_class_member(tokens: TokenList) -> ParseResult<ClassMemberT
 }
 
 fn constructor_class_member(tokens: TokenList) -> ParseResult<ClassMemberType> {
-    alternative(
+    definitely(
         tokens,
         ContextType::ConstructorClassMember,
         |tokens| terminal(tokens, TerminalToken::Constructor),
@@ -161,7 +161,7 @@ fn constructor_class_member(tokens: TokenList) -> ParseResult<ClassMemberType> {
 }
 
 fn function_class_member(tokens: TokenList) -> ParseResult<ClassMemberType> {
-    alternative(
+    definitely(
         tokens,
         ContextType::FunctionClassMember,
         |tokens| {

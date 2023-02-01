@@ -2,7 +2,7 @@ use crate::ast::{
     ForDeclaration, ForeachIndex, Identifier, IfElse, Precedence, SwitchCase, SwitchCaseCondition,
     Type,
 };
-use crate::parser::combinator::{alt, alternative};
+use crate::parser::combinator::{alt, definitely};
 use crate::parser::expression::expression;
 use crate::parser::identifier::identifier;
 use crate::parser::list::many;
@@ -13,7 +13,7 @@ use crate::parser::{ContextType, ParseResult, TokenList};
 use crate::token::{TerminalToken, Token};
 
 pub fn if_else(tokens: TokenList) -> ParseResult<IfElse> {
-    alternative(
+    definitely(
         tokens,
         ContextType::ElseStatement,
         |tokens| terminal(tokens, TerminalToken::Else),
@@ -49,7 +49,7 @@ pub fn switch_case_condition(tokens: TokenList) -> ParseResult<SwitchCaseConditi
         return Ok((tokens, SwitchCaseCondition::Default { default }));
     }
 
-    alternative(
+    definitely(
         tokens,
         ContextType::SwitchCaseCondition,
         |tokens| terminal(tokens, TerminalToken::Case),

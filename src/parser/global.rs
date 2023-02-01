@@ -1,5 +1,5 @@
 use crate::ast::GlobalDeclaration;
-use crate::parser::combinator::{alternative, first_of, map};
+use crate::parser::combinator::{definitely, first_of, map};
 use crate::parser::identifier::identifier;
 use crate::parser::list::separated_list1;
 use crate::parser::statement::{
@@ -34,7 +34,7 @@ pub fn global_declaration(tokens: TokenList) -> ParseResult<GlobalDeclaration> {
 }
 
 fn function_global(tokens: TokenList) -> ParseResult<GlobalDeclaration> {
-    alternative(
+    definitely(
         tokens,
         ContextType::FunctionGlobal,
         |tokens| terminal(tokens, TerminalToken::Function),

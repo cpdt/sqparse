@@ -2,7 +2,7 @@ use crate::ast::{
     FunctionArg, FunctionArgs, FunctionCaptures, FunctionDeclaration, FunctionEnvironment,
     FunctionRefArg, Precedence, SeparatedList1,
 };
-use crate::parser::combinator::{alt, alternative, opt, span};
+use crate::parser::combinator::{alt, definitely, opt, span};
 use crate::parser::expression::expression;
 use crate::parser::identifier::identifier;
 use crate::parser::list::separated_list_trailing0;
@@ -129,7 +129,7 @@ fn untyped_function_arg(tokens: TokenList) -> ParseResult<FunctionArg> {
 }
 
 pub fn function_captures(tokens: TokenList) -> ParseResult<FunctionCaptures> {
-    alternative(
+    definitely(
         tokens,
         ContextType::FunctionDeclarationCaptures,
         |tokens| terminal(tokens, TerminalToken::Colon),

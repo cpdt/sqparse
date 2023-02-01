@@ -1,5 +1,5 @@
 use crate::ast::{Precedence, TableSlot, TableSlotType};
-use crate::parser::combinator::{alternative, first_of, opt, span};
+use crate::parser::combinator::{definitely, first_of, opt, span};
 use crate::parser::expression::{expression, literal};
 use crate::parser::function::function_declaration;
 use crate::parser::identifier::identifier;
@@ -36,7 +36,7 @@ fn table_slot_type(tokens: TokenList) -> ParseResult<TableSlotType> {
 }
 
 fn property_table_slot(tokens: TokenList) -> ParseResult<TableSlotType> {
-    alternative(
+    definitely(
         tokens,
         ContextType::PropertyTableSlot,
         identifier,
@@ -48,7 +48,7 @@ fn property_table_slot(tokens: TokenList) -> ParseResult<TableSlotType> {
 }
 
 fn computed_property_table_slot(tokens: TokenList) -> ParseResult<TableSlotType> {
-    alternative(
+    definitely(
         tokens,
         ContextType::ComputedPropertyTableSlot,
         |tokens| {
@@ -79,7 +79,7 @@ fn computed_property_table_slot(tokens: TokenList) -> ParseResult<TableSlotType>
 }
 
 fn json_property_table_slot(tokens: TokenList) -> ParseResult<TableSlotType> {
-    alternative(
+    definitely(
         tokens,
         ContextType::JsonPropertyTableSlot,
         literal,
@@ -99,7 +99,7 @@ fn json_property_table_slot(tokens: TokenList) -> ParseResult<TableSlotType> {
 }
 
 fn constructor_table_slot(tokens: TokenList) -> ParseResult<TableSlotType> {
-    alternative(
+    definitely(
         tokens,
         ContextType::FunctionTableSlot,
         |tokens| terminal(tokens, TerminalToken::Constructor),
@@ -110,14 +110,14 @@ fn constructor_table_slot(tokens: TokenList) -> ParseResult<TableSlotType> {
                 TableSlotType::Constructor {
                     constructor,
                     declaration: Box::new(declaration),
-                }
+                },
             ))
-        }
+        },
     )
 }
 
 fn function_table_slot(tokens: TokenList) -> ParseResult<TableSlotType> {
-    alternative(
+    definitely(
         tokens,
         ContextType::FunctionTableSlot,
         |tokens| {

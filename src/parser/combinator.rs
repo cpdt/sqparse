@@ -3,7 +3,7 @@ use crate::parser::token::{terminal, terminal_item};
 use crate::parser::{ContextType, ParseError, ParseErrorType, ParseResult, TokenList};
 use crate::token::{TerminalToken, Token};
 
-pub fn alternative<'s, D, T>(
+pub fn definitely<'s, D, T>(
     tokens: TokenList<'s>,
     context: ContextType,
     determinant: impl FnOnce(TokenList<'s>) -> ParseResult<'s, D>,

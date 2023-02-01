@@ -2,7 +2,7 @@ use crate::ast::{
     ArrayType, FunctionRefType, GenericType, LocalType, NullableType, PlainType, Precedence,
     ReferenceType, StructType, Type, VarType,
 };
-use crate::parser::combinator::{alt_map, alternative, first_of, map, span};
+use crate::parser::combinator::{alt_map, definitely, first_of, map, span};
 use crate::parser::expression::expression;
 use crate::parser::function::function_ref_arg;
 use crate::parser::identifier::identifier;
@@ -67,7 +67,7 @@ pub fn void_function_ref_type(tokens: TokenList) -> ParseResult<FunctionRefType>
 }
 
 pub fn struct_type(tokens: TokenList) -> ParseResult<StructType> {
-    alternative(
+    definitely(
         tokens,
         ContextType::StructType,
         |tokens| terminal(tokens, TerminalToken::Struct),
@@ -136,7 +136,7 @@ fn generic_type<'s>(
     tokens: TokenList<'s>,
     left: TypeRef<'_, 's>,
 ) -> ParseResult<'s, GenericType<'s>> {
-    alternative(
+    definitely(
         tokens,
         ContextType::GenericType,
         |tokens| terminal(tokens, TerminalToken::Less),
@@ -198,7 +198,7 @@ fn function_ref_type<'s>(
     tokens: TokenList<'s>,
     return_type: impl FnOnce() -> Option<Type<'s>>,
 ) -> ParseResult<'s, FunctionRefType<'s>> {
-    alternative(
+    definitely(
         tokens,
         ContextType::FunctionRefType,
         |tokens| terminal(tokens, TerminalToken::FunctionRef),

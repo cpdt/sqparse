@@ -8,7 +8,7 @@ use crate::ast::{
 use crate::parser::array::array_value;
 use crate::parser::class::class_declaration;
 use crate::parser::combinator::{
-    alt_map, alternative, first_of, map, opt, prevent_ending_line, span,
+    alt_map, definitely, first_of, map, opt, prevent_ending_line, span,
 };
 use crate::parser::error::InternalErrorType;
 use crate::parser::function::function_declaration;
@@ -109,7 +109,7 @@ pub fn var(tokens: TokenList) -> ParseResult<VarExpression> {
 }
 
 pub fn root_var(tokens: TokenList) -> ParseResult<RootVarExpression> {
-    alternative(
+    definitely(
         tokens,
         ContextType::RootVarExpression,
         |tokens| terminal(tokens, TerminalToken::Namespace),
@@ -122,7 +122,7 @@ pub fn root_var(tokens: TokenList) -> ParseResult<RootVarExpression> {
 }
 
 pub fn prefix(tokens: TokenList) -> ParseResult<PrefixExpression> {
-    alternative(
+    definitely(
         tokens,
         ContextType::ExpressionRightHandSide,
         prefix_operator,
@@ -171,7 +171,7 @@ pub fn table_delimited(
 }
 
 pub fn class(tokens: TokenList) -> ParseResult<ClassExpression> {
-    alternative(
+    definitely(
         tokens,
         ContextType::ClassExpression,
         |tokens| terminal(tokens, TerminalToken::Class),
@@ -205,7 +205,7 @@ pub fn array(tokens: TokenList) -> ParseResult<ArrayExpression> {
 }
 
 pub fn delegate(tokens: TokenList) -> ParseResult<DelegateExpression> {
-    alternative(
+    definitely(
         tokens,
         ContextType::DelegateExpression,
         |tokens| terminal(tokens, TerminalToken::Delegate),
@@ -228,7 +228,7 @@ pub fn delegate(tokens: TokenList) -> ParseResult<DelegateExpression> {
 }
 
 pub fn vector(tokens: TokenList) -> ParseResult<VectorExpression> {
-    alternative(
+    definitely(
         tokens,
         ContextType::VectorExpression,
         |tokens| terminal(tokens, TerminalToken::Less),
@@ -257,7 +257,7 @@ pub fn vector(tokens: TokenList) -> ParseResult<VectorExpression> {
 }
 
 pub fn expect(tokens: TokenList) -> ParseResult<ExpectExpression> {
-    alternative(
+    definitely(
         tokens,
         ContextType::ExpectExpression,
         |tokens| terminal(tokens, TerminalToken::Expect),
@@ -287,7 +287,7 @@ pub fn expect(tokens: TokenList) -> ParseResult<ExpectExpression> {
 }
 
 pub fn function(tokens: TokenList) -> ParseResult<FunctionExpression> {
-    alternative(
+    definitely(
         tokens,
         ContextType::FunctionExpression,
         |tokens| {
@@ -390,7 +390,7 @@ fn property<'s>(
         return Err(precedence_error(tokens));
     }
 
-    alternative(
+    definitely(
         tokens,
         ContextType::ExpressionRightHandSide,
         |tokens| terminal(tokens, TerminalToken::Dot),
@@ -419,7 +419,7 @@ fn ternary<'s>(
         return Err(precedence_error(tokens));
     }
 
-    alternative(
+    definitely(
         tokens,
         ContextType::TernaryExpression,
         |tokens| terminal(tokens, TerminalToken::Question),
@@ -447,7 +447,7 @@ fn binary<'s>(
     precedence: Precedence,
     left: ExpressionRef<'_, 's>,
 ) -> ParseResult<'s, BinaryExpression<'s>> {
-    alternative(
+    definitely(
         tokens,
         ContextType::ExpressionRightHandSide,
         |tokens| {
@@ -535,7 +535,7 @@ fn call<'s>(
         return Err(precedence_error(tokens));
     }
 
-    alternative(
+    definitely(
         tokens,
         ContextType::CallExpression,
         |tokens| {
@@ -587,7 +587,7 @@ fn comma<'s>(
         return Err(precedence_error(tokens));
     }
 
-    alternative(
+    definitely(
         tokens,
         ContextType::CommaExpression,
         |tokens| terminal(tokens, TerminalToken::Comma),

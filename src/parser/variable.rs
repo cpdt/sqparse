@@ -1,5 +1,5 @@
 use crate::ast::{Precedence, VarDeclaration, VarInitializer};
-use crate::parser::combinator::{alternative, opt};
+use crate::parser::combinator::{definitely, opt};
 use crate::parser::expression::expression;
 use crate::parser::identifier::identifier;
 use crate::parser::token::terminal;
@@ -14,7 +14,7 @@ pub fn var_declaration(tokens: TokenList) -> ParseResult<VarDeclaration> {
 }
 
 pub fn var_initializer(tokens: TokenList) -> ParseResult<VarInitializer> {
-    alternative(
+    definitely(
         tokens,
         ContextType::VarInitializer,
         |tokens| terminal(tokens, TerminalToken::Assign),

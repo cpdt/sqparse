@@ -9,7 +9,7 @@ use crate::ast::{
     WaitThreadStatement, WhileStatement, YieldStatement,
 };
 use crate::parser::class::class_declaration;
-use crate::parser::combinator::{alt, alternative, first_of, map, opt, prevent_ending_line, span};
+use crate::parser::combinator::{alt, definitely, first_of, map, opt, prevent_ending_line, span};
 use crate::parser::control::{for_declaration, foreach_index, foreach_value, if_else, switch_case};
 use crate::parser::enum_::enum_entry;
 use crate::parser::error::InternalErrorType;
@@ -159,7 +159,7 @@ pub fn block_statement(tokens: TokenList) -> ParseResult<BlockStatement> {
 }
 
 pub fn if_statement(tokens: TokenList) -> ParseResult<IfStatement> {
-    alternative(
+    definitely(
         tokens,
         ContextType::IfStatement,
         |tokens| terminal(tokens, TerminalToken::If),
@@ -193,7 +193,7 @@ pub fn if_statement(tokens: TokenList) -> ParseResult<IfStatement> {
 }
 
 pub fn while_statement(tokens: TokenList) -> ParseResult<WhileStatement> {
-    alternative(
+    definitely(
         tokens,
         ContextType::WhileStatement,
         |tokens| terminal(tokens, TerminalToken::While),
@@ -225,7 +225,7 @@ pub fn while_statement(tokens: TokenList) -> ParseResult<WhileStatement> {
 }
 
 pub fn do_while_statement(tokens: TokenList) -> ParseResult<DoWhileStatement> {
-    alternative(
+    definitely(
         tokens,
         ContextType::DoWhileStatement,
         |tokens| terminal(tokens, TerminalToken::Do),
@@ -258,7 +258,7 @@ pub fn do_while_statement(tokens: TokenList) -> ParseResult<DoWhileStatement> {
 }
 
 pub fn switch_statement(tokens: TokenList) -> ParseResult<SwitchStatement> {
-    alternative(
+    definitely(
         tokens,
         ContextType::SwitchStatement,
         |tokens| terminal(tokens, TerminalToken::Switch),
@@ -300,7 +300,7 @@ pub fn switch_statement(tokens: TokenList) -> ParseResult<SwitchStatement> {
 }
 
 pub fn for_statement(tokens: TokenList) -> ParseResult<ForStatement> {
-    alternative(
+    definitely(
         tokens,
         ContextType::ForStatement,
         |tokens| terminal(tokens, TerminalToken::For),
@@ -353,7 +353,7 @@ pub fn for_statement(tokens: TokenList) -> ParseResult<ForStatement> {
 }
 
 pub fn foreach_statement(tokens: TokenList) -> ParseResult<ForeachStatement> {
-    alternative(
+    definitely(
         tokens,
         ContextType::ForeachStatement,
         |tokens| terminal(tokens, TerminalToken::Foreach),
@@ -403,7 +403,7 @@ pub fn continue_statement(tokens: TokenList) -> ParseResult<ContinueStatement> {
 }
 
 pub fn return_statement(tokens: TokenList) -> ParseResult<ReturnStatement> {
-    alternative(
+    definitely(
         tokens,
         ContextType::ReturnStatement,
         |tokens| terminal(tokens, TerminalToken::Return),
@@ -431,7 +431,7 @@ pub fn return_statement(tokens: TokenList) -> ParseResult<ReturnStatement> {
 }
 
 pub fn yield_statement(tokens: TokenList) -> ParseResult<YieldStatement> {
-    alternative(
+    definitely(
         tokens,
         ContextType::YieldStatement,
         |tokens| terminal(tokens, TerminalToken::Yield),
@@ -459,7 +459,7 @@ pub fn yield_statement(tokens: TokenList) -> ParseResult<YieldStatement> {
 }
 
 pub fn class_declaration_statement(tokens: TokenList) -> ParseResult<ClassDeclarationStatement> {
-    alternative(
+    definitely(
         tokens,
         ContextType::ClassStatement,
         |tokens| terminal(tokens, TerminalToken::Class),
@@ -479,7 +479,7 @@ pub fn class_declaration_statement(tokens: TokenList) -> ParseResult<ClassDeclar
 }
 
 pub fn try_catch_statement(tokens: TokenList) -> ParseResult<TryCatchStatement> {
-    alternative(
+    definitely(
         tokens,
         ContextType::TryCatchStatement,
         |tokens| terminal(tokens, TerminalToken::Try),
@@ -514,7 +514,7 @@ pub fn try_catch_statement(tokens: TokenList) -> ParseResult<TryCatchStatement> 
 }
 
 pub fn throw_statement(tokens: TokenList) -> ParseResult<ThrowStatement> {
-    alternative(
+    definitely(
         tokens,
         ContextType::ThrowStatement,
         |tokens| terminal(tokens, TerminalToken::Throw),
@@ -532,7 +532,7 @@ pub fn throw_statement(tokens: TokenList) -> ParseResult<ThrowStatement> {
 }
 
 pub fn const_statement(tokens: TokenList) -> ParseResult<ConstStatement> {
-    alternative(
+    definitely(
         tokens,
         ContextType::ConstStatement,
         |tokens| terminal(tokens, TerminalToken::Const),
@@ -579,7 +579,7 @@ fn untyped_const_statement<'s>(
 }
 
 pub fn enum_statement(tokens: TokenList) -> ParseResult<EnumStatement> {
-    alternative(
+    definitely(
         tokens,
         ContextType::EnumStatement,
         |tokens| terminal(tokens, TerminalToken::Enum),
@@ -621,7 +621,7 @@ pub fn expression_statement(tokens: TokenList) -> ParseResult<ExpressionStatemen
 pub fn constructor_declaration_statement(
     tokens: TokenList,
 ) -> ParseResult<ConstructorDeclarationStatement> {
-    alternative(
+    definitely(
         tokens,
         ContextType::FunctionDeclarationStatement,
         |tokens| {
@@ -665,7 +665,7 @@ pub fn constructor_declaration_statement(
 pub fn function_declaration_statement(
     tokens: TokenList,
 ) -> ParseResult<FunctionDeclarationStatement> {
-    alternative(
+    definitely(
         tokens,
         ContextType::FunctionDeclarationStatement,
         |tokens| {
@@ -699,7 +699,7 @@ pub fn var_declaration_statement(tokens: TokenList) -> ParseResult<VarDeclaratio
     // say a token stream is definitely a variable declaration statement if it has a type followed
     // by an identifier. However once that's known we must parse the rest of the declarations,
     // which involves some awkward shuffling.
-    alternative(
+    definitely(
         tokens,
         ContextType::VarDeclarationStatement,
         |tokens| {
@@ -745,7 +745,7 @@ pub fn var_declaration_statement(tokens: TokenList) -> ParseResult<VarDeclaratio
 }
 
 pub fn thread_statement(tokens: TokenList) -> ParseResult<ThreadStatement> {
-    alternative(
+    definitely(
         tokens,
         ContextType::ThreadStatement,
         |tokens| terminal(tokens, TerminalToken::Thread),
@@ -763,7 +763,7 @@ pub fn thread_statement(tokens: TokenList) -> ParseResult<ThreadStatement> {
 }
 
 pub fn delay_thread_statement(tokens: TokenList) -> ParseResult<DelayThreadStatement> {
-    alternative(
+    definitely(
         tokens,
         ContextType::DelayThreadStatement,
         |tokens| terminal(tokens, TerminalToken::DelayThread),
@@ -794,7 +794,7 @@ pub fn delay_thread_statement(tokens: TokenList) -> ParseResult<DelayThreadState
 }
 
 pub fn wait_thread_statement(tokens: TokenList) -> ParseResult<WaitThreadStatement> {
-    alternative(
+    definitely(
         tokens,
         ContextType::WaitThreadStatement,
         |tokens| terminal(tokens, TerminalToken::WaitThread),
@@ -812,7 +812,7 @@ pub fn wait_thread_statement(tokens: TokenList) -> ParseResult<WaitThreadStateme
 }
 
 pub fn wait_statement(tokens: TokenList) -> ParseResult<WaitStatement> {
-    alternative(
+    definitely(
         tokens,
         ContextType::WaitStatement,
         |tokens| terminal(tokens, TerminalToken::Wait),
@@ -830,7 +830,7 @@ pub fn wait_statement(tokens: TokenList) -> ParseResult<WaitStatement> {
 }
 
 pub fn struct_declaration_statement(tokens: TokenList) -> ParseResult<StructDeclarationStatement> {
-    alternative(
+    definitely(
         tokens,
         ContextType::StructStatement,
         |tokens| terminal(tokens, TerminalToken::Struct),
@@ -850,7 +850,7 @@ pub fn struct_declaration_statement(tokens: TokenList) -> ParseResult<StructDecl
 }
 
 pub fn typedef_statement(tokens: TokenList) -> ParseResult<TypedefStatement> {
-    alternative(
+    definitely(
         tokens,
         ContextType::TypedefStatement,
         |tokens| terminal(tokens, TerminalToken::Typedef),
@@ -863,7 +863,7 @@ pub fn typedef_statement(tokens: TokenList) -> ParseResult<TypedefStatement> {
 }
 
 pub fn global_statement(tokens: TokenList) -> ParseResult<GlobalStatement> {
-    alternative(
+    definitely(
         tokens,
         ContextType::GlobalStatement,
         |tokens| terminal(tokens, TerminalToken::Global),
