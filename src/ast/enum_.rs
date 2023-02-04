@@ -5,7 +5,7 @@ use crate::token::Token;
 ///
 /// Grammar: [Identifier] [VarInitializer]? `,`?
 ///
-/// [`EnumStatement`]: crate::ast::EnumStatement
+/// [`EnumStatement`]: crate::ast::EnumDefinitionStatement
 #[derive(Debug, Clone)]
 pub struct EnumEntry<'s> {
     pub name: Identifier<'s>,

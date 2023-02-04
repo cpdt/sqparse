@@ -1,15 +1,21 @@
-use crate::ast::{Expression, Identifier, Statement, Type, VarDeclarationStatement};
+use crate::ast::{Expression, Identifier, Statement, StatementType, Type, VarDefinitionStatement};
 use crate::token::Token;
 
-/// Optional `else` part of an [`IfStatement`].
+/// Trailing part of an [`IfStatement`].
 ///
-/// Grammar: `else` [Statement]
+/// Grammar: [StatementType] | ([Statement] `else` [StatementType])
 ///
 /// [`IfStatement`]: crate::ast::IfStatement
 #[derive(Debug, Clone)]
-pub struct IfElse<'s> {
-    pub else_: &'s Token<'s>,
-    pub body: Box<Statement<'s>>,
+pub enum IfStatementType<'s> {
+    NoElse {
+        body: Box<StatementType<'s>>,
+    },
+    Else {
+        body: Box<Statement<'s>>,
+        else_: &'s Token<'s>,
+        else_body: Box<StatementType<'s>>,
+    },
 }
 
 /// Case block in a [`SwitchStatement`].
@@ -41,30 +47,30 @@ pub enum SwitchCaseCondition<'s> {
     },
 }
 
-/// Declaration part of a [`ForStatement`].
+/// Definition part of a [`ForStatement`].
 ///
 /// [`ForStatement`]: crate::ast::ForStatement
 #[derive(Debug, Clone)]
-pub enum ForDeclaration<'s> {
-    /// Expression declaration.
+pub enum ForDefinition<'s> {
+    /// Expression definition.
     ///
     /// Grammar: [Expression]
     Expression(Box<Expression<'s>>),
 
-    /// Variable declaration.
+    /// Variable definition.
     ///
-    /// Grammar: [VarDeclarationStatement]
-    Declaration(VarDeclarationStatement<'s>),
+    /// Grammar: [VarDefinitionStatement]
+    Definition(VarDefinitionStatement<'s>),
 }
 
-/// Optional index declaration in a [`ForeachStatement`].
+/// Optional index definition in a [`ForeachStatement`].
 ///
 /// Grammar: [Type]? [Identifier] `,`
 ///
 /// [`ForeachStatement`]: crate::ast::ForeachStatement
 #[derive(Debug, Clone)]
 pub struct ForeachIndex<'s> {
-    pub ty: Option<Type<'s>>,
+    pub type_: Option<Type<'s>>,
     pub name: Identifier<'s>,
     pub comma: &'s Token<'s>,
 }

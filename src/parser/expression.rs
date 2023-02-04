@@ -6,82 +6,88 @@ use crate::ast::{
     VectorExpression,
 };
 use crate::parser::array::array_value;
-use crate::parser::class::class_declaration;
-use crate::parser::combinator::{
-    alt_map, definitely, first_of, map, opt, prevent_ending_line, span,
-};
-use crate::parser::error::InternalErrorType;
-use crate::parser::function::function_declaration;
+use crate::parser::class::class_definition;
+use crate::parser::function::function_definition;
 use crate::parser::identifier::{identifier, method_identifier};
-use crate::parser::list::{many, separated_list1, separated_list_trailing0};
 use crate::parser::operator::{binary_operator, postfix_operator, prefix_operator};
+use crate::parser::parse_result_ext::ParseResultExt;
 use crate::parser::table::table_slot;
-use crate::parser::token::terminal;
+use crate::parser::token_list::TokenList;
+use crate::parser::token_list_ext::TokenListExt;
 use crate::parser::type_::type_;
-use crate::parser::{ContextType, ParseError, ParseErrorType, ParseResult, TokenList};
+use crate::parser::ParseResult;
 use crate::token::{TerminalToken, TokenType};
+use crate::{ContextType, ParseErrorType};
 
-pub fn expression(tokens: TokenList, precedence: Precedence) -> ParseResult<Expression> {
-    let (mut tokens, mut value) = value(tokens)?;
+pub fn expression(tokens: TokenList, precedence: Precedence) -> ParseResult<Box<Expression>> {
+    let (mut next_tokens, mut value) = value(tokens)?;
 
     loop {
         let mut value_container = Some(value);
-        match operator(tokens, precedence, ExpressionRef(&mut value_container)) {
-            Ok((new_tokens, new_value)) => {
-                tokens = new_tokens;
+        match operator(next_tokens, precedence, ExpressionRef(&mut value_container))
+            .with_context_from(ContextType::Expression, tokens)
+            .maybe(next_tokens)?
+        {
+            (new_tokens, Some(new_value)) => {
+                next_tokens = new_tokens;
                 value = new_value;
             }
-            Err(err) if err.is_fatal => return Err(err),
-            Err(_) => return Ok((tokens, value_container.unwrap())),
+            (new_tokens, None) => return Ok((new_tokens, value_container.unwrap())),
         }
     }
 }
 
-pub fn value(tokens: TokenList) -> ParseResult<Expression> {
-    first_of(
-        tokens,
-        [
-            // Must be before other value types to ensure the return type is parsed.
-            |tokens| map(function(tokens), Expression::Function),
-            |tokens| map(parens(tokens), Expression::Parens),
-            |tokens| map(literal(tokens), Expression::Literal),
-            |tokens| map(var(tokens), Expression::Var),
-            |tokens| map(root_var(tokens), Expression::RootVar),
-            |tokens| map(prefix(tokens), Expression::Prefix),
-            |tokens| map(table(tokens), Expression::Table),
-            |tokens| map(class(tokens), Expression::Class),
-            |tokens| map(array(tokens), Expression::Array),
-            |tokens| map(delegate(tokens), Expression::Delegate),
-            |tokens| map(vector(tokens), Expression::Vector),
-            |tokens| map(expect(tokens), Expression::Expect),
-        ],
-        |_| {
-            Err(ParseError::new(
-                ParseErrorType::ExpectedExpression,
-                tokens.start_index(),
-            ))
-        },
-    )
+fn value(tokens: TokenList) -> ParseResult<Box<Expression>> {
+    function(tokens)
+        .map_val(Expression::Function)
+        .or_try(|| parens(tokens).map_val(Expression::Parens))
+        .or_try(|| literal(tokens).map_val(Expression::Literal))
+        .or_try(|| var(tokens).map_val(Expression::Var))
+        .or_try(|| root_var(tokens).map_val(Expression::RootVar))
+        .or_try(|| table(tokens).map_val(Expression::Table))
+        .or_try(|| class(tokens).map_val(Expression::Class))
+        .or_try(|| array(tokens).map_val(Expression::Array))
+        .or_try(|| vector(tokens).map_val(Expression::Vector))
+        .or_try(|| prefix(tokens).map_val(Expression::Prefix))
+        .or_try(|| delegate(tokens).map_val(Expression::Delegate))
+        .or_try(|| expect(tokens).map_val(Expression::Expect))
+        .or_error(|| tokens.error(ParseErrorType::ExpectedExpression))
+        .map_val(Box::new)
+}
+
+pub fn function(tokens: TokenList) -> ParseResult<FunctionExpression> {
+    type_(tokens)
+        .not_line_ending()
+        .maybe(tokens)
+        .and_then(|(tokens, return_type)| {
+            tokens
+                .terminal(TerminalToken::Function)
+                .map_val(|function| (return_type, function))
+        })
+        .determines(|tokens, (return_type, function)| {
+            function_definition(tokens).map_val(|definition| FunctionExpression {
+                return_type,
+                function,
+                definition,
+            })
+        })
+        .with_context_from(ContextType::FunctionLiteral, tokens)
 }
 
 pub fn parens(tokens: TokenList) -> ParseResult<ParensExpression> {
-    span(
-        tokens,
-        ContextType::ParensExpression,
-        TerminalToken::OpenBracket,
-        TerminalToken::CloseBracket,
-        |tokens, open, close| {
-            let (tokens, value) = expression(tokens, Precedence::None)?;
-            Ok((
-                tokens,
-                ParensExpression {
+    tokens
+        .terminal(TerminalToken::OpenBracket)
+        .determines_and_opens(
+            ContextType::Expression,
+            |tokens| tokens.terminal(TerminalToken::CloseBracket),
+            |tokens, open, close| {
+                expression(tokens, Precedence::None).map_val(|value| ParensExpression {
                     open,
-                    value: Box::new(value),
+                    value,
                     close,
-                },
-            ))
-        },
-    )
+                })
+            },
+        )
 }
 
 pub fn literal(tokens: TokenList) -> ParseResult<LiteralExpression> {
@@ -97,47 +103,19 @@ pub fn literal(tokens: TokenList) -> ParseResult<LiteralExpression> {
         }
     }
 
-    Err(ParseError::new(
-        ParseErrorType::ExpectedLiteral,
-        tokens.start_index(),
-    ))
+    Err(tokens.error(ParseErrorType::ExpectedLiteral))
 }
 
 pub fn var(tokens: TokenList) -> ParseResult<VarExpression> {
-    let (tokens, name) = identifier(tokens)?;
-    Ok((tokens, VarExpression { name }))
+    identifier(tokens).map_val(|name| VarExpression { name })
 }
 
 pub fn root_var(tokens: TokenList) -> ParseResult<RootVarExpression> {
-    definitely(
-        tokens,
-        ContextType::RootVarExpression,
-        |tokens| terminal(tokens, TerminalToken::Namespace),
-        |tokens, root| {
-            let (tokens, name) = identifier(tokens)?;
-
-            Ok((tokens, RootVarExpression { root, name }))
-        },
-    )
-}
-
-pub fn prefix(tokens: TokenList) -> ParseResult<PrefixExpression> {
-    definitely(
-        tokens,
-        ContextType::ExpressionRightHandSide,
-        prefix_operator,
-        |tokens, operator| {
-            let (tokens, value) = expression(tokens, Precedence::Prefix)?;
-
-            Ok((
-                tokens,
-                PrefixExpression {
-                    operator,
-                    value: Box::new(value),
-                },
-            ))
-        },
-    )
+    tokens
+        .terminal(TerminalToken::Namespace)
+        .determines(|tokens, root| {
+            identifier(tokens).map_val(|name| RootVarExpression { root, name })
+        })
 }
 
 pub fn table(tokens: TokenList) -> ParseResult<TableExpression> {
@@ -149,14 +127,12 @@ pub fn table_delimited(
     open_terminal: TerminalToken,
     close_terminal: TerminalToken,
 ) -> ParseResult<TableExpression> {
-    span(
-        tokens,
-        ContextType::TableExpression,
-        open_terminal,
-        close_terminal,
+    tokens.terminal(open_terminal).determines_and_opens(
+        ContextType::TableLiteral,
+        |tokens| tokens.terminal(close_terminal),
         |tokens, open, close| {
-            let (tokens, slots) = many(tokens, table_slot)?;
-            let (tokens, spread) = opt(tokens, terminal(tokens, TerminalToken::Ellipsis))?;
+            let (tokens, slots) = tokens.many(table_slot)?;
+            let (tokens, spread) = tokens.terminal(TerminalToken::Ellipsis).maybe(tokens)?;
             Ok((
                 tokens,
                 TableExpression {
@@ -171,103 +147,95 @@ pub fn table_delimited(
 }
 
 pub fn class(tokens: TokenList) -> ParseResult<ClassExpression> {
-    definitely(
-        tokens,
-        ContextType::ClassExpression,
-        |tokens| terminal(tokens, TerminalToken::Class),
-        |tokens, class| {
-            let (tokens, declaration) = class_declaration(tokens)?;
-            Ok((tokens, ClassExpression { class, declaration }))
-        },
-    )
+    tokens
+        .terminal(TerminalToken::Class)
+        .determines(|tokens, class| {
+            class_definition(tokens).map_val(|definition| ClassExpression { class, definition })
+        })
+        .with_context_from(ContextType::ClassLiteral, tokens)
 }
 
 pub fn array(tokens: TokenList) -> ParseResult<ArrayExpression> {
-    span(
-        tokens,
-        ContextType::ArrayExpression,
-        TerminalToken::OpenSquare,
-        TerminalToken::CloseSquare,
-        |tokens, open, close| {
-            let (tokens, values) = many(tokens, array_value)?;
-            let (tokens, spread) = opt(tokens, terminal(tokens, TerminalToken::Ellipsis))?;
-            Ok((
-                tokens,
-                ArrayExpression {
-                    open,
-                    values,
-                    spread,
-                    close,
-                },
-            ))
-        },
-    )
-}
-
-pub fn delegate(tokens: TokenList) -> ParseResult<DelegateExpression> {
-    definitely(
-        tokens,
-        ContextType::DelegateExpression,
-        |tokens| terminal(tokens, TerminalToken::Delegate),
-        |tokens, delegate| {
-            let (tokens, parent) = expression(tokens, Precedence::None)?;
-            let (tokens, colon) = terminal(tokens, TerminalToken::Colon)?;
-            let (tokens, value) = expression(tokens, Precedence::Comma)?;
-
-            Ok((
-                tokens,
-                DelegateExpression {
-                    delegate,
-                    parent: Box::new(parent),
-                    colon,
-                    value: Box::new(value),
-                },
-            ))
-        },
-    )
+    tokens
+        .terminal(TerminalToken::OpenSquare)
+        .determines_and_opens(
+            ContextType::ArrayLiteral,
+            |tokens| tokens.terminal(TerminalToken::CloseSquare),
+            |tokens, open, close| {
+                let (tokens, values) = tokens.many(array_value)?;
+                let (tokens, spread) = tokens.terminal(TerminalToken::Ellipsis).maybe(tokens)?;
+                Ok((
+                    tokens,
+                    ArrayExpression {
+                        open,
+                        values,
+                        spread,
+                        close,
+                    },
+                ))
+            },
+        )
 }
 
 pub fn vector(tokens: TokenList) -> ParseResult<VectorExpression> {
-    definitely(
-        tokens,
-        ContextType::VectorExpression,
-        |tokens| terminal(tokens, TerminalToken::Less),
-        |tokens, open| {
+    tokens
+        .terminal(TerminalToken::Less)
+        .determines(|tokens, open| {
             let (tokens, x) = expression(tokens, Precedence::Comma)?;
-            let (tokens, comma_1) = terminal(tokens, TerminalToken::Comma)?;
+            let (tokens, comma_1) = tokens.terminal(TerminalToken::Comma)?;
             let (tokens, y) = expression(tokens, Precedence::Comma)?;
-            let (tokens, comma_2) = terminal(tokens, TerminalToken::Comma)?;
+            let (tokens, comma_2) = tokens.terminal(TerminalToken::Comma)?;
             let (tokens, z) = expression(tokens, Precedence::Bitshift)?;
-            let (tokens, close) = terminal(tokens, TerminalToken::Greater)?;
-
+            let (tokens, close) = tokens.terminal(TerminalToken::Greater)?;
             Ok((
                 tokens,
                 VectorExpression {
                     open,
-                    x: Box::new(x),
+                    x,
                     comma_1,
-                    y: Box::new(y),
+                    y,
                     comma_2,
-                    z: Box::new(z),
+                    z,
                     close,
                 },
             ))
-        },
-    )
+        })
+        .with_context_from(ContextType::VectorLiteral, tokens)
+}
+
+pub fn prefix(tokens: TokenList) -> ParseResult<PrefixExpression> {
+    prefix_operator(tokens).determines(|tokens, operator| {
+        expression(tokens, Precedence::Prefix).map_val(|value| PrefixExpression { operator, value })
+    })
+}
+
+pub fn delegate(tokens: TokenList) -> ParseResult<DelegateExpression> {
+    tokens
+        .terminal(TerminalToken::Delegate)
+        .determines(|tokens, delegate| {
+            let (tokens, parent) = expression(tokens, Precedence::None)?;
+            let (tokens, colon) = tokens.terminal(TerminalToken::Colon)?;
+            let (tokens, value) = expression(tokens, Precedence::Comma)?;
+            Ok((
+                tokens,
+                DelegateExpression {
+                    delegate,
+                    parent,
+                    colon,
+                    value,
+                },
+            ))
+        })
 }
 
 pub fn expect(tokens: TokenList) -> ParseResult<ExpectExpression> {
-    definitely(
-        tokens,
-        ContextType::ExpectExpression,
-        |tokens| terminal(tokens, TerminalToken::Expect),
-        |tokens, expect| {
+    tokens
+        .terminal(TerminalToken::Expect)
+        .determines(|tokens, expect| {
             let (tokens, ty) = type_(tokens)?;
-            span(
-                tokens,
-                ContextType::ExpectExpression,
-                TerminalToken::OpenBracket,
-                TerminalToken::CloseBracket,
+            tokens.terminal(TerminalToken::OpenBracket).opens(
+                ContextType::Expression,
+                |tokens| tokens.terminal(TerminalToken::CloseBracket),
                 |tokens, open, close| {
                     let (tokens, value) = expression(tokens, Precedence::None)?;
                     Ok((
@@ -276,52 +244,18 @@ pub fn expect(tokens: TokenList) -> ParseResult<ExpectExpression> {
                             expect,
                             ty,
                             open,
-                            value: Box::new(value),
+                            value,
                             close,
                         },
                     ))
                 },
             )
-        },
-    )
+        })
 }
 
-pub fn function(tokens: TokenList) -> ParseResult<FunctionExpression> {
-    definitely(
-        tokens,
-        ContextType::FunctionExpression,
-        |tokens| {
-            let (tokens, return_type) = prevent_ending_line(
-                tokens,
-                opt(tokens, type_(tokens).map_err(|err| err.into_non_fatal())),
-            )?;
-            let (tokens, function) = terminal(tokens, TerminalToken::Function)?;
-            Ok((tokens, (return_type, function)))
-        },
-        |tokens, (return_type, function)| {
-            let (tokens, declaration) = function_declaration(tokens)?;
-            Ok((
-                tokens,
-                FunctionExpression {
-                    return_type,
-                    function,
-                    declaration,
-                },
-            ))
-        },
-    )
-}
-
-fn precedence_error(tokens: TokenList) -> ParseError {
-    ParseError::new(
-        ParseErrorType::Internal(InternalErrorType::PrecedenceMismatch),
-        tokens.start_index(),
-    )
-}
-
-struct ExpressionRef<'a, 's>(&'a mut Option<Expression<'s>>);
+struct ExpressionRef<'a, 's>(&'a mut Option<Box<Expression<'s>>>);
 impl<'a, 's> ExpressionRef<'a, 's> {
-    fn take(self) -> Expression<'s> {
+    fn take(self) -> Box<Expression<'s>> {
         self.0.take().unwrap()
     }
 }
@@ -330,54 +264,23 @@ fn operator<'s>(
     tokens: TokenList<'s>,
     precedence: Precedence,
     left: ExpressionRef<'_, 's>,
-) -> ParseResult<'s, Expression<'s>> {
+) -> ParseResult<'s, Box<Expression<'s>>> {
     let left_ref = left.0;
-    alt_map(
-        property(tokens, precedence, ExpressionRef(left_ref)),
-        Expression::Property,
-    )
-    .or_else(|| {
-        alt_map(
-            ternary(tokens, precedence, ExpressionRef(left_ref)),
-            Expression::Ternary,
-        )
-    })
-    .or_else(|| {
-        alt_map(
-            binary(tokens, precedence, ExpressionRef(left_ref)),
-            Expression::Binary,
-        )
-    })
-    .or_else(|| {
-        alt_map(
-            index(tokens, precedence, ExpressionRef(left_ref)),
-            Expression::Index,
-        )
-    })
-    .or_else(|| {
-        alt_map(
-            postfix(tokens, precedence, ExpressionRef(left_ref)),
-            Expression::Postfix,
-        )
-    })
-    .or_else(|| {
-        alt_map(
-            call(tokens, precedence, ExpressionRef(left_ref)),
-            Expression::Call,
-        )
-    })
-    .or_else(|| {
-        alt_map(
-            comma(tokens, precedence, ExpressionRef(left_ref)),
-            Expression::Comma,
-        )
-    })
-    .unwrap_or_else(|| {
-        Err(ParseError::new(
-            ParseErrorType::ExpectedOperator,
-            tokens.start_index(),
-        ))
-    })
+
+    property(tokens, precedence, ExpressionRef(left_ref))
+        .map_val(Expression::Property)
+        .or_try(|| {
+            ternary(tokens, precedence, ExpressionRef(left_ref)).map_val(Expression::Ternary)
+        })
+        .or_try(|| binary(tokens, precedence, ExpressionRef(left_ref)).map_val(Expression::Binary))
+        .or_try(|| index(tokens, precedence, ExpressionRef(left_ref)).map_val(Expression::Index))
+        .or_try(|| {
+            postfix(tokens, precedence, ExpressionRef(left_ref)).map_val(Expression::Postfix)
+        })
+        .or_try(|| call(tokens, precedence, ExpressionRef(left_ref)).map_val(Expression::Call))
+        .or_try(|| comma(tokens, precedence, ExpressionRef(left_ref)).map_val(Expression::Comma))
+        .or_error(|| tokens.error(ParseErrorType::ExpectedOperator))
+        .map_val(Box::new)
 }
 
 fn property<'s>(
@@ -387,26 +290,18 @@ fn property<'s>(
 ) -> ParseResult<'s, PropertyExpression<'s>> {
     // left associative
     if precedence >= Precedence::Property {
-        return Err(precedence_error(tokens));
+        return Err(tokens.error(ParseErrorType::Precedence));
     }
 
-    definitely(
-        tokens,
-        ContextType::ExpressionRightHandSide,
-        |tokens| terminal(tokens, TerminalToken::Dot),
-        |tokens, dot| {
-            let (tokens, property) = method_identifier(tokens)?;
-
-            Ok((
-                tokens,
-                PropertyExpression {
-                    base: Box::new(left.take()),
-                    dot,
-                    property,
-                },
-            ))
-        },
-    )
+    tokens
+        .terminal(TerminalToken::Dot)
+        .determines(|tokens, dot| {
+            method_identifier(tokens).map_val(|property| PropertyExpression {
+                base: left.take(),
+                dot,
+                property,
+            })
+        })
 }
 
 fn ternary<'s>(
@@ -416,30 +311,27 @@ fn ternary<'s>(
 ) -> ParseResult<'s, TernaryExpression<'s>> {
     // right associative
     if precedence > Precedence::Ternary {
-        return Err(precedence_error(tokens));
+        return Err(tokens.error(ParseErrorType::Precedence));
     }
 
-    definitely(
-        tokens,
-        ContextType::TernaryExpression,
-        |tokens| terminal(tokens, TerminalToken::Question),
-        |tokens, question| {
+    tokens
+        .terminal(TerminalToken::Question)
+        .determines(|tokens, question| {
             let (tokens, true_value) = expression(tokens, Precedence::None)?;
-            let (tokens, separator) = terminal(tokens, TerminalToken::Colon)?;
+            let (tokens, separator) = tokens.terminal(TerminalToken::Colon)?;
             let (tokens, false_value) = expression(tokens, Precedence::Ternary)?;
 
             Ok((
                 tokens,
                 TernaryExpression {
-                    condition: Box::new(left.take()),
+                    condition: left.take(),
                     question,
-                    true_value: Box::new(true_value),
+                    true_value,
                     separator,
-                    false_value: Box::new(false_value),
+                    false_value,
                 },
             ))
-        },
-    )
+        })
 }
 
 fn binary<'s>(
@@ -447,31 +339,22 @@ fn binary<'s>(
     precedence: Precedence,
     left: ExpressionRef<'_, 's>,
 ) -> ParseResult<'s, BinaryExpression<'s>> {
-    definitely(
-        tokens,
-        ContextType::ExpressionRightHandSide,
-        |tokens| {
-            let (tokens, operator) = binary_operator(tokens)?;
-
+    binary_operator(tokens)
+        .and_then(|(tokens, operator)| {
             // left associative
             if precedence >= operator.precedence() {
-                Err(precedence_error(tokens))
+                Err(tokens.error(ParseErrorType::Precedence))
             } else {
                 Ok((tokens, operator))
             }
-        },
-        |tokens, operator| {
-            let (tokens, right) = expression(tokens, operator.precedence())?;
-            Ok((
-                tokens,
-                BinaryExpression {
-                    left: Box::new(left.take()),
-                    operator,
-                    right: Box::new(right),
-                },
-            ))
-        },
-    )
+        })
+        .determines(|tokens, operator| {
+            expression(tokens, operator.precedence()).map_val(|right| BinaryExpression {
+                left: left.take(),
+                operator,
+                right,
+            })
+        })
 }
 
 fn index<'s>(
@@ -481,28 +364,23 @@ fn index<'s>(
 ) -> ParseResult<'s, IndexExpression<'s>> {
     // left associative
     if precedence >= Precedence::Postfix {
-        return Err(precedence_error(tokens));
+        return Err(tokens.error(ParseErrorType::Precedence));
     }
 
-    span(
-        tokens,
-        ContextType::IndexExpression,
-        TerminalToken::OpenSquare,
-        TerminalToken::CloseSquare,
-        |tokens, open, close| {
-            let (tokens, index) = expression(tokens, Precedence::None)?;
-
-            Ok((
-                tokens,
-                IndexExpression {
-                    base: Box::new(left.take()),
+    tokens
+        .terminal(TerminalToken::OpenSquare)
+        .determines_and_opens(
+            ContextType::Expression,
+            |tokens| tokens.terminal(TerminalToken::CloseSquare),
+            |tokens, open, close| {
+                expression(tokens, Precedence::None).map_val(|index| IndexExpression {
+                    base: left.take(),
                     open,
-                    index: Box::new(index),
+                    index,
                     close,
-                },
-            ))
-        },
-    )
+                })
+            },
+        )
 }
 
 fn postfix<'s>(
@@ -512,17 +390,28 @@ fn postfix<'s>(
 ) -> ParseResult<'s, PostfixExpression<'s>> {
     // left associative
     if precedence >= Precedence::Postfix {
-        return Err(precedence_error(tokens));
+        return Err(tokens.error(ParseErrorType::Precedence));
     }
 
-    let (tokens, operator) = postfix_operator(tokens)?;
-    Ok((
-        tokens,
-        PostfixExpression {
-            value: Box::new(left.take()),
+    // Newlines are not allowed before postfix operators to prevent this:
+    // ```
+    // a
+    // ++b
+    // ```
+    // from being parsed as:
+    // ```
+    // (a++) b
+    // ```
+    if tokens.is_newline() {
+        return Err(tokens.error(ParseErrorType::IllegalLineBreak));
+    }
+
+    postfix_operator(tokens)
+        .not_definite()
+        .map_val(|operator| PostfixExpression {
+            value: left.take(),
             operator,
-        },
-    ))
+        })
 }
 
 fn call<'s>(
@@ -532,49 +421,42 @@ fn call<'s>(
 ) -> ParseResult<'s, CallExpression<'s>> {
     // left associative
     if precedence >= Precedence::Postfix {
-        return Err(precedence_error(tokens));
+        return Err(tokens.error(ParseErrorType::Precedence));
     }
 
-    definitely(
-        tokens,
-        ContextType::CallExpression,
-        |tokens| {
-            span(
-                tokens,
-                ContextType::CallExpression,
-                TerminalToken::OpenBracket,
-                TerminalToken::CloseBracket,
-                |tokens, open, close| {
-                    let (tokens, arguments) = separated_list_trailing0(
-                        tokens,
-                        |tokens| expression(tokens, Precedence::Comma),
-                        |tokens| terminal(tokens, TerminalToken::Comma),
-                    )?;
-                    Ok((tokens, (open, arguments, close)))
-                },
-            )
-        },
-        |tokens, (open, arguments, close)| {
-            // Post-initializer table is only valid if there isn't a newline between the call and
-            // it. Otherwise block statements following function calls will be parsed as tables.
+    tokens
+        .terminal(TerminalToken::OpenBracket)
+        .determines_and_opens(
+            ContextType::CallArgumentList,
+            |tokens| tokens.terminal(TerminalToken::CloseBracket),
+            |tokens, open, close| {
+                tokens
+                    .separated_list_trailing0(
+                        |tokens| expression(tokens, Precedence::Comma).map_val(|expr| *expr),
+                        |tokens| tokens.terminal(TerminalToken::Comma),
+                    )
+                    .map_val(|args| (open, args, close))
+            },
+        )
+        .and_then(|(tokens, (open, arguments, close))| {
+            // Post-initializer may appear after a call, as long as it is on the same line.
             let (tokens, post_initializer) = if tokens.is_newline() {
                 (tokens, None)
             } else {
-                opt(tokens, table(tokens))?
+                table(tokens).maybe(tokens)?
             };
 
             Ok((
                 tokens,
                 CallExpression {
-                    function: Box::new(left.take()),
+                    function: left.take(),
                     open,
                     arguments,
                     close,
                     post_initializer,
                 },
             ))
-        },
-    )
+        })
 }
 
 fn comma<'s>(
@@ -584,22 +466,17 @@ fn comma<'s>(
 ) -> ParseResult<'s, CommaExpression<'s>> {
     // left associative
     if precedence >= Precedence::Comma {
-        return Err(precedence_error(tokens));
+        return Err(tokens.error(ParseErrorType::Precedence));
     }
 
-    definitely(
-        tokens,
-        ContextType::CommaExpression,
-        |tokens| terminal(tokens, TerminalToken::Comma),
-        |tokens, first_comma| {
-            let (tokens, mut values) = separated_list1(
-                tokens,
-                |tokens| expression(tokens, Precedence::Comma),
-                |tokens| terminal(tokens, TerminalToken::Comma),
+    tokens
+        .terminal(TerminalToken::Comma)
+        .determines(|tokens, first_comma| {
+            let (tokens, mut values) = tokens.separated_list1(
+                |tokens| expression(tokens, Precedence::Comma).map_val(|expr| *expr),
+                |tokens| tokens.terminal(TerminalToken::Comma),
             )?;
-            values.items.insert(0, (left.take(), first_comma));
-
+            values.items.insert(0, (*left.take(), first_comma));
             Ok((tokens, CommaExpression { values }))
-        },
-    )
+        })
 }

@@ -1,324 +1,295 @@
 use crate::ast::{
-    BlockStatement, BreakStatement, ClassDeclarationStatement, ConstStatement,
-    ConstructorDeclarationStatement, ContinueStatement, DelayThreadStatement, DoWhileStatement,
-    EmptyStatement, EnumStatement, ExpressionStatement, ForStatement, ForeachStatement,
-    FunctionDeclarationStatement, GlobalStatement, GlobalizeAllFunctionsStatement, IfStatement,
-    Precedence, ReturnStatement, SeparatedListTrailing1, Statement, StatementType,
-    StructDeclarationStatement, SwitchStatement, ThreadStatement, ThrowStatement,
-    TryCatchStatement, TypedefStatement, UntypedStatement, VarDeclarationStatement, WaitStatement,
-    WaitThreadStatement, WhileStatement, YieldStatement,
+    BlockStatement, BreakStatement, ClassDefinitionStatement, ConstDefinitionStatement,
+    ConstructorDefinitionStatement, ContinueStatement, DelayThreadStatement, DoWhileStatement,
+    EmptyStatement, EnumDefinitionStatement, ExpressionStatement, ForStatement, ForeachStatement,
+    FunctionDefinitionStatement, GlobalStatement, GlobalizeAllFunctionsStatement, IfStatement,
+    Precedence, ReturnStatement, SeparatedList1, Statement, StatementType,
+    StructDefinitionStatement, SwitchStatement, ThreadStatement, ThrowStatement, TryCatchStatement,
+    Type, TypeDefinitionStatement, UntypedStatement, VarDefinition, VarDefinitionStatement,
+    WaitStatement, WaitThreadStatement, WhileStatement, YieldStatement,
 };
-use crate::parser::class::class_declaration;
-use crate::parser::combinator::{alt, definitely, first_of, map, opt, prevent_ending_line, span};
-use crate::parser::control::{for_declaration, foreach_index, foreach_value, if_else, switch_case};
+use crate::parser::class::class_definition;
+use crate::parser::control::{
+    for_definition, foreach_index, foreach_value, if_statement_type, switch_case,
+};
 use crate::parser::enum_::enum_entry;
-use crate::parser::error::InternalErrorType;
 use crate::parser::expression::expression;
-use crate::parser::function::function_declaration;
-use crate::parser::global::global_declaration;
+use crate::parser::function::function_definition;
+use crate::parser::global::global_definition;
 use crate::parser::identifier::identifier;
-use crate::parser::list::{many, separated_list1, separated_list_trailing0};
-use crate::parser::struct_::struct_declaration;
-use crate::parser::token::terminal;
+use crate::parser::parse_result_ext::ParseResultExt;
+use crate::parser::struct_::struct_definition;
+use crate::parser::token_list::TokenList;
+use crate::parser::token_list_ext::TokenListExt;
 use crate::parser::type_::type_;
-use crate::parser::variable::{var_declaration, var_initializer};
-use crate::parser::{ContextType, ParseError, ParseErrorType, ParseResult, TokenList};
-use crate::token::{TerminalToken, Token, TokenType};
+use crate::parser::variable::{var_definition, var_initializer};
+use crate::parser::ParseResult;
+use crate::token::{TerminalToken, Token};
+use crate::{ContextType, ParseErrorType};
 
 pub fn statement(tokens: TokenList) -> ParseResult<Statement> {
-    // Empty statement?
-    if let Ok((tokens, end)) = terminal(tokens, TerminalToken::Semicolon) {
+    let (tokens, statement) = inner_statement(tokens)?;
+
+    // Statement must end with a semicolon, newline, or end of input.
+    if statement.semicolon.is_some() || tokens.is_newline() || tokens.is_ended() {
+        Ok((tokens, statement))
+    } else {
+        Err(tokens.error(ParseErrorType::ExpectedEndOfStatement))
+    }
+}
+
+fn inner_statement(tokens: TokenList) -> ParseResult<Statement> {
+    // Handle a completely empty statement that just has a semicolon
+    if let Ok((tokens, semicolon)) = tokens.terminal(TerminalToken::Semicolon) {
         return Ok((
             tokens,
             Statement {
                 ty: StatementType::Empty(EmptyStatement { empty: None }),
-                end: Some(end),
+                semicolon: Some(semicolon),
             },
         ));
     }
 
     let (tokens, ty) = statement_type(tokens)?;
-    let (tokens, end) = opt(tokens, terminal(tokens, TerminalToken::Semicolon))?;
-    Ok((tokens, Statement { ty, end }))
+    let (tokens, semicolon) = tokens.terminal(TerminalToken::Semicolon).maybe(tokens)?;
+
+    Ok((tokens, Statement { ty, semicolon }))
 }
 
 pub fn statement_type(tokens: TokenList) -> ParseResult<StatementType> {
-    first_of(
-        tokens,
-        [
-            |tokens| map(empty_statement(tokens), StatementType::Empty),
-            // Must be before `function_declaration_statement` to ensure it doesn't match the
-            // function-like syntax.
-            |tokens| {
-                map(
-                    constructor_declaration_statement(tokens),
-                    StatementType::ConstructorDeclaration,
-                )
-            },
-            // Must be before other types to ensure the return type/var type is parsed.
-            |tokens| {
-                map(
-                    function_declaration_statement(tokens),
-                    StatementType::FunctionDeclaration,
-                )
-            },
-            |tokens| {
-                map(
-                    var_declaration_statement(tokens),
-                    StatementType::VarDeclaration,
-                )
-            },
-            |tokens| map(block_statement(tokens), StatementType::Block),
-            |tokens| map(if_statement(tokens), StatementType::If),
-            |tokens| map(while_statement(tokens), StatementType::While),
-            |tokens| map(do_while_statement(tokens), StatementType::DoWhile),
-            |tokens| map(switch_statement(tokens), StatementType::Switch),
-            |tokens| map(for_statement(tokens), StatementType::For),
-            |tokens| map(foreach_statement(tokens), StatementType::ForeachStatement),
-            |tokens| map(break_statement(tokens), StatementType::Break),
-            |tokens| map(continue_statement(tokens), StatementType::Continue),
-            |tokens| map(return_statement(tokens), StatementType::Return),
-            |tokens| map(yield_statement(tokens), StatementType::Yield),
-            |tokens| {
-                map(
-                    class_declaration_statement(tokens),
-                    StatementType::ClassDeclaration,
-                )
-            },
-            |tokens| map(try_catch_statement(tokens), StatementType::TryCatch),
-            |tokens| map(throw_statement(tokens), StatementType::Throw),
-            |tokens| map(const_statement(tokens), StatementType::Const),
-            |tokens| map(enum_statement(tokens), StatementType::Enum),
-            |tokens| map(thread_statement(tokens), StatementType::Thread),
-            |tokens| map(delay_thread_statement(tokens), StatementType::DelayThread),
-            |tokens| map(wait_thread_statement(tokens), StatementType::WaitThread),
-            |tokens| map(wait_statement(tokens), StatementType::Wait),
-            |tokens| {
-                map(
-                    struct_declaration_statement(tokens),
-                    StatementType::StructDeclaration,
-                )
-            },
-            |tokens| map(typedef_statement(tokens), StatementType::Typedef),
-            |tokens| map(global_statement(tokens), StatementType::Global),
-            |tokens| {
-                map(
-                    globalize_all_functions_statement(tokens),
-                    StatementType::GlobalizeAllFunctions,
-                )
-            },
-            |tokens| map(untyped_statement(tokens), StatementType::Untyped),
-            // This is last because it is potentially expensive.
-            |tokens| map(expression_statement(tokens), StatementType::Expression),
-        ],
-        |_| {
-            Err(ParseError::new(
-                ParseErrorType::ExpectedStatement,
-                tokens.start_index(),
-            ))
-        },
-    )
-}
-
-pub fn empty_statement(tokens: TokenList) -> ParseResult<EmptyStatement> {
-    if let Some((tokens, item)) = tokens.split_first() {
-        if item.token.ty == TokenType::Empty {
-            return Ok((
-                tokens,
-                EmptyStatement {
-                    empty: Some(&item.token),
-                },
-            ));
-        }
+    // Look ahead to allow empty statements.
+    if tokens.terminal(TerminalToken::Semicolon).is_ok() {
+        return Ok((tokens, StatementType::Empty(EmptyStatement { empty: None })));
     }
 
-    Err(ParseError::new(
-        ParseErrorType::Internal(InternalErrorType::Empty),
-        tokens.start_index(),
-    ))
+    // An `empty` token can appear at the end of the token list.
+    if let Some((tokens, empty)) = tokens.empty() {
+        return Ok((
+            tokens,
+            StatementType::Empty(EmptyStatement { empty: Some(empty) }),
+        ));
+    }
+
+    // `typed_function_or_var_definition_statement` must be first to ensure the return type is
+    // parsed properly.
+    typed_function_or_var_definition_statement(tokens)
+        .or_try(|| block_statement(tokens).map_val(StatementType::Block))
+        .or_try(|| if_statement(tokens).map_val(StatementType::If))
+        .or_try(|| while_statement(tokens).map_val(StatementType::While))
+        .or_try(|| do_while_statement(tokens).map_val(StatementType::DoWhile))
+        .or_try(|| switch_statement(tokens).map_val(StatementType::Switch))
+        .or_try(|| for_statement(tokens).map_val(StatementType::For))
+        .or_try(|| foreach_statement(tokens).map_val(StatementType::Foreach))
+        .or_try(|| try_catch_statement(tokens).map_val(StatementType::TryCatch))
+        .or_try(|| break_statement(tokens).map_val(StatementType::Break))
+        .or_try(|| continue_statement(tokens).map_val(StatementType::Continue))
+        .or_try(|| return_statement(tokens).map_val(StatementType::Return))
+        .or_try(|| yield_statement(tokens).map_val(StatementType::Yield))
+        .or_try(|| throw_statement(tokens).map_val(StatementType::Throw))
+        .or_try(|| const_definition_statement(tokens).map_val(StatementType::Const))
+        .or_try(|| class_definition_statement(tokens).map_val(StatementType::ClassDefinition))
+        .or_try(|| enum_definition_statement(tokens).map_val(StatementType::EnumDefinition))
+        .or_try(|| void_function_definition_statement(tokens))
+        .or_try(|| struct_definition_statement(tokens).map_val(StatementType::StructDefinition))
+        .or_try(|| type_definition_statement(tokens).map_val(StatementType::TypeDefinition))
+        .or_try(|| thread_statement(tokens).map_val(StatementType::Thread))
+        .or_try(|| delay_thread_statement(tokens).map_val(StatementType::DelayThread))
+        .or_try(|| wait_thread_statement(tokens).map_val(StatementType::WaitThread))
+        .or_try(|| wait_statement(tokens).map_val(StatementType::Wait))
+        .or_try(|| global_statement(tokens).map_val(StatementType::Global))
+        .or_try(|| {
+            globalize_all_functions_statement(tokens).map_val(StatementType::GlobalizeAllFunctions)
+        })
+        .or_try(|| untyped_statement(tokens).map_val(StatementType::Untyped))
+        .or_try(|| expression_statement(tokens).map_val(StatementType::Expression))
+        .or_error(|| tokens.error(ParseErrorType::ExpectedStatement))
+}
+
+pub fn expression_statement(tokens: TokenList) -> ParseResult<ExpressionStatement> {
+    expression(tokens, Precedence::None).map_val(|value| ExpressionStatement { value })
 }
 
 pub fn block_statement(tokens: TokenList) -> ParseResult<BlockStatement> {
-    span(
-        tokens,
-        ContextType::BlockStatement,
-        TerminalToken::OpenBrace,
-        TerminalToken::CloseBrace,
-        |tokens, open, close| {
-            let (tokens, statements) = many(tokens, statement)?;
-            Ok((
-                tokens,
-                BlockStatement {
-                    open,
-                    statements,
-                    close,
-                },
-            ))
-        },
-    )
+    tokens
+        .terminal(TerminalToken::OpenBrace)
+        .determines_and_opens(
+            ContextType::BlockStatement,
+            |tokens| tokens.terminal(TerminalToken::CloseBrace),
+            |mut tokens, open, close| {
+                let mut statements = Vec::new();
+                while !tokens.is_ended() {
+                    let (new_tokens, statement) = statement(tokens)?;
+                    tokens = new_tokens;
+                    statements.push(statement);
+                }
+                Ok((
+                    tokens,
+                    BlockStatement {
+                        open,
+                        statements,
+                        close,
+                    },
+                ))
+            },
+        )
 }
 
 pub fn if_statement(tokens: TokenList) -> ParseResult<IfStatement> {
-    definitely(
-        tokens,
-        ContextType::IfStatement,
-        |tokens| terminal(tokens, TerminalToken::If),
-        |tokens, if_| {
-            let (tokens, (open, condition, close)) = span(
-                tokens,
-                ContextType::IfStatement,
-                TerminalToken::OpenBracket,
-                TerminalToken::CloseBracket,
-                |tokens, open, close| {
-                    let (tokens, condition) = expression(tokens, Precedence::None)?;
-                    Ok((tokens, (open, condition, close)))
-                },
-            )?;
-            let (tokens, body) = statement(tokens)?;
-            let (tokens, else_) = opt(tokens, if_else(tokens))?;
+    tokens
+        .terminal(TerminalToken::If)
+        .determines(|tokens, if_| {
+            let (tokens, (open, condition, close)) =
+                tokens.terminal(TerminalToken::OpenBracket).opens(
+                    ContextType::IfStatementCondition,
+                    |tokens| tokens.terminal(TerminalToken::CloseBracket),
+                    |tokens, open, close| {
+                        expression(tokens, Precedence::None)
+                            .map_val(|condition| (open, condition, close))
+                    },
+                )?;
+            let (tokens, ty) = if_statement_type(tokens)?;
 
             Ok((
                 tokens,
                 IfStatement {
                     if_,
                     open,
-                    condition: Box::new(condition),
+                    condition,
                     close,
-                    body: Box::new(body),
-                    else_,
+                    ty,
                 },
             ))
-        },
-    )
+        })
+        .with_context_from(ContextType::IfStatement, tokens)
 }
 
 pub fn while_statement(tokens: TokenList) -> ParseResult<WhileStatement> {
-    definitely(
-        tokens,
-        ContextType::WhileStatement,
-        |tokens| terminal(tokens, TerminalToken::While),
-        |tokens, while_| {
-            let (tokens, (open, condition, close)) = span(
+    tokens
+        .terminal(TerminalToken::While)
+        .determines(|tokens, while_| {
+            let (tokens, (open, condition, close)) =
+                tokens.terminal(TerminalToken::OpenBracket).opens(
+                    ContextType::WhileStatementCondition,
+                    |tokens| tokens.terminal(TerminalToken::CloseBracket),
+                    |tokens, open, close| {
+                        expression(tokens, Precedence::None)
+                            .map_val(|condition| (open, condition, close))
+                    },
+                )?;
+            let (tokens, body) = statement_type(tokens).replace_context_from(
+                ContextType::BlockStatement,
+                ContextType::Span,
                 tokens,
-                ContextType::WhileStatement,
-                TerminalToken::OpenBracket,
-                TerminalToken::CloseBracket,
-                |tokens, open, close| {
-                    let (tokens, condition) = expression(tokens, Precedence::None)?;
-                    Ok((tokens, (open, condition, close)))
-                },
             )?;
-            let (tokens, body) = statement(tokens)?;
 
             Ok((
                 tokens,
                 WhileStatement {
                     while_,
                     open,
-                    condition: Box::new(condition),
+                    condition,
                     close,
                     body: Box::new(body),
                 },
             ))
-        },
-    )
+        })
+        .with_context_from(ContextType::WhileStatement, tokens)
 }
 
 pub fn do_while_statement(tokens: TokenList) -> ParseResult<DoWhileStatement> {
-    definitely(
-        tokens,
-        ContextType::DoWhileStatement,
-        |tokens| terminal(tokens, TerminalToken::Do),
-        |tokens, do_| {
-            let (tokens, body) = statement(tokens)?;
-            let (tokens, while_) = terminal(tokens, TerminalToken::While)?;
-
-            span(
+    tokens
+        .terminal(TerminalToken::Do)
+        .determines(|tokens, do_| {
+            let (tokens, body) = inner_statement(tokens).replace_context_from(
+                ContextType::BlockStatement,
+                ContextType::Span,
                 tokens,
-                ContextType::DoWhileStatement,
-                TerminalToken::OpenBracket,
-                TerminalToken::CloseBracket,
-                |tokens, open, close| {
-                    let (tokens, condition) = expression(tokens, Precedence::None)?;
-                    Ok((
-                        tokens,
-                        DoWhileStatement {
-                            do_,
-                            body: Box::new(body),
-                            while_,
-                            open,
-                            condition: Box::new(condition),
-                            close,
-                        },
-                    ))
+            )?;
+            let (tokens, while_) = tokens.terminal(TerminalToken::While)?;
+
+            let (tokens, (open, condition, close)) =
+                tokens.terminal(TerminalToken::OpenBracket).opens(
+                    ContextType::DoWhileStatementCondition,
+                    |tokens| tokens.terminal(TerminalToken::CloseBracket),
+                    |tokens, open, close| {
+                        expression(tokens, Precedence::None)
+                            .map_val(|condition| (open, condition, close))
+                    },
+                )?;
+
+            Ok((
+                tokens,
+                DoWhileStatement {
+                    do_,
+                    body: Box::new(body),
+                    while_,
+                    open,
+                    condition,
+                    close,
                 },
-            )
-        },
-    )
+            ))
+        })
+        .with_context_from(ContextType::DoWhileStatement, tokens)
 }
 
 pub fn switch_statement(tokens: TokenList) -> ParseResult<SwitchStatement> {
-    definitely(
-        tokens,
-        ContextType::SwitchStatement,
-        |tokens| terminal(tokens, TerminalToken::Switch),
-        |tokens, switch| {
-            let (tokens, (open_condition, condition, close_condition)) = span(
-                tokens,
-                ContextType::SwitchStatement,
-                TerminalToken::OpenBracket,
-                TerminalToken::CloseBracket,
-                |tokens, open, close| {
-                    let (tokens, condition) = expression(tokens, Precedence::None)?;
-                    Ok((tokens, (open, condition, close)))
-                },
-            )?;
+    tokens
+        .terminal(TerminalToken::Switch)
+        .determines(|tokens, switch| {
+            let (tokens, (open_condition, condition, close_condition)) =
+                tokens.terminal(TerminalToken::OpenBracket).opens(
+                    ContextType::SwitchStatementCondition,
+                    |tokens| tokens.terminal(TerminalToken::CloseBracket),
+                    |tokens, open, close| {
+                        expression(tokens, Precedence::None)
+                            .map_val(|condition| (open, condition, close))
+                    },
+                )?;
 
-            span(
+            let (tokens, (open_cases, cases, close_cases)) =
+                tokens.terminal(TerminalToken::OpenBrace).opens(
+                    ContextType::Span,
+                    |tokens| tokens.terminal(TerminalToken::CloseBrace),
+                    |tokens, open, close| {
+                        tokens
+                            .many(switch_case)
+                            .map_val(|cases| (open, cases, close))
+                    },
+                )?;
+
+            Ok((
                 tokens,
-                ContextType::SwitchStatement,
-                TerminalToken::OpenBrace,
-                TerminalToken::CloseBrace,
-                |tokens, open_cases, close_cases| {
-                    let (tokens, cases) = many(tokens, switch_case)?;
-                    Ok((
-                        tokens,
-                        SwitchStatement {
-                            switch,
-                            open_condition,
-                            condition: Box::new(condition),
-                            close_condition,
-                            open_cases,
-                            cases,
-                            close_cases,
-                        },
-                    ))
+                SwitchStatement {
+                    switch,
+                    open_condition,
+                    condition,
+                    close_condition,
+                    open_cases,
+                    cases,
+                    close_cases,
                 },
-            )
-        },
-    )
+            ))
+        })
+        .with_context_from(ContextType::SwitchStatement, tokens)
 }
 
 pub fn for_statement(tokens: TokenList) -> ParseResult<ForStatement> {
-    definitely(
-        tokens,
-        ContextType::ForStatement,
-        |tokens| terminal(tokens, TerminalToken::For),
-        |tokens, for_| {
+    tokens
+        .terminal(TerminalToken::For)
+        .determines(|tokens, for_| {
             let (
                 tokens,
                 (open, initializer, semicolon_1, condition, semicolon_2, increment, close),
-            ) = span(
-                tokens,
-                ContextType::ForStatement,
-                TerminalToken::OpenBracket,
-                TerminalToken::CloseBracket,
+            ) = tokens.terminal(TerminalToken::OpenBracket).opens(
+                ContextType::ForStatementCondition,
+                |tokens| tokens.terminal(TerminalToken::CloseBracket),
                 |tokens, open, close| {
-                    let (tokens, initializer) = opt(tokens, for_declaration(tokens))?;
-                    let (tokens, semicolon_1) = terminal(tokens, TerminalToken::Semicolon)?;
-                    let (tokens, condition) = opt(tokens, expression(tokens, Precedence::None))?;
-                    let (tokens, semicolon_2) = terminal(tokens, TerminalToken::Semicolon)?;
-                    let (tokens, increment) = opt(tokens, expression(tokens, Precedence::None))?;
+                    let (tokens, initializer) = for_definition(tokens).maybe(tokens)?;
+                    let (tokens, semicolon_1) = tokens.terminal(TerminalToken::Semicolon)?;
+                    let (tokens, condition) = expression(tokens, Precedence::None).maybe(tokens)?;
+                    let (tokens, semicolon_2) = tokens.terminal(TerminalToken::Semicolon)?;
+                    let (tokens, increment) = expression(tokens, Precedence::None).maybe(tokens)?;
+
                     Ok((
                         tokens,
                         (
@@ -333,7 +304,13 @@ pub fn for_statement(tokens: TokenList) -> ParseResult<ForStatement> {
                     ))
                 },
             )?;
-            let (tokens, body) = statement(tokens)?;
+
+            let (tokens, body) = statement_type(tokens).replace_context_from(
+                ContextType::BlockStatement,
+                ContextType::Span,
+                tokens,
+            )?;
+
             Ok((
                 tokens,
                 ForStatement {
@@ -341,39 +318,43 @@ pub fn for_statement(tokens: TokenList) -> ParseResult<ForStatement> {
                     open,
                     initializer,
                     semicolon_1,
-                    condition: condition.map(Box::new),
+                    condition,
                     semicolon_2,
-                    increment: increment.map(Box::new),
+                    increment,
                     close,
                     body: Box::new(body),
                 },
             ))
-        },
-    )
+        })
+        .with_context_from(ContextType::ForStatement, tokens)
 }
 
 pub fn foreach_statement(tokens: TokenList) -> ParseResult<ForeachStatement> {
-    definitely(
-        tokens,
-        ContextType::ForeachStatement,
-        |tokens| terminal(tokens, TerminalToken::Foreach),
-        |tokens, foreach| {
-            let (tokens, (open, index, value_type, value_name, in_, array, close)) = span(
+    tokens
+        .terminal(TerminalToken::Foreach)
+        .determines(|tokens, foreach| {
+            let (tokens, (open, index, value_type, value_name, in_, array, close)) =
+                tokens.terminal(TerminalToken::OpenBracket).opens(
+                    ContextType::ForeachStatementCondition,
+                    |tokens| tokens.terminal(TerminalToken::CloseBracket),
+                    |tokens, open, close| {
+                        let (tokens, index) = foreach_index(tokens).maybe(tokens)?;
+                        let (tokens, (value_type, value_name, in_)) = foreach_value(tokens)?;
+                        let (tokens, array) = expression(tokens, Precedence::None)?;
+
+                        Ok((
+                            tokens,
+                            (open, index, value_type, value_name, in_, array, close),
+                        ))
+                    },
+                )?;
+
+            let (tokens, body) = statement_type(tokens).replace_context_from(
+                ContextType::BlockStatement,
+                ContextType::Span,
                 tokens,
-                ContextType::ForeachStatement,
-                TerminalToken::OpenBracket,
-                TerminalToken::CloseBracket,
-                |tokens, open, close| {
-                    let (tokens, index) = opt(tokens, foreach_index(tokens))?;
-                    let (tokens, (value_type, value_name, in_)) = foreach_value(tokens)?;
-                    let (tokens, array) = expression(tokens, Precedence::None)?;
-                    Ok((
-                        tokens,
-                        (open, index, value_type, value_name, in_, array, close),
-                    ))
-                },
             )?;
-            let (tokens, body) = statement(tokens)?;
+
             Ok((
                 tokens,
                 ForeachStatement {
@@ -383,120 +364,39 @@ pub fn foreach_statement(tokens: TokenList) -> ParseResult<ForeachStatement> {
                     value_type,
                     value_name,
                     in_,
-                    array: Box::new(array),
+                    array,
                     close,
                     body: Box::new(body),
                 },
             ))
-        },
-    )
-}
-
-pub fn break_statement(tokens: TokenList) -> ParseResult<BreakStatement> {
-    let (tokens, break_) = terminal(tokens, TerminalToken::Break)?;
-    Ok((tokens, BreakStatement { break_ }))
-}
-
-pub fn continue_statement(tokens: TokenList) -> ParseResult<ContinueStatement> {
-    let (tokens, continue_) = terminal(tokens, TerminalToken::Continue)?;
-    Ok((tokens, ContinueStatement { continue_ }))
-}
-
-pub fn return_statement(tokens: TokenList) -> ParseResult<ReturnStatement> {
-    definitely(
-        tokens,
-        ContextType::ReturnStatement,
-        |tokens| terminal(tokens, TerminalToken::Return),
-        |tokens, return_| {
-            if tokens.is_newline() {
-                Ok((
-                    tokens,
-                    ReturnStatement {
-                        return_,
-                        value: None,
-                    },
-                ))
-            } else {
-                let (tokens, value) = opt(tokens, expression(tokens, Precedence::None))?;
-                Ok((
-                    tokens,
-                    ReturnStatement {
-                        return_,
-                        value: value.map(Box::new),
-                    },
-                ))
-            }
-        },
-    )
-}
-
-pub fn yield_statement(tokens: TokenList) -> ParseResult<YieldStatement> {
-    definitely(
-        tokens,
-        ContextType::YieldStatement,
-        |tokens| terminal(tokens, TerminalToken::Yield),
-        |tokens, yield_| {
-            if tokens.is_newline() {
-                Ok((
-                    tokens,
-                    YieldStatement {
-                        yield_,
-                        value: None,
-                    },
-                ))
-            } else {
-                let (tokens, value) = opt(tokens, expression(tokens, Precedence::None))?;
-                Ok((
-                    tokens,
-                    YieldStatement {
-                        yield_,
-                        value: value.map(Box::new),
-                    },
-                ))
-            }
-        },
-    )
-}
-
-pub fn class_declaration_statement(tokens: TokenList) -> ParseResult<ClassDeclarationStatement> {
-    definitely(
-        tokens,
-        ContextType::ClassStatement,
-        |tokens| terminal(tokens, TerminalToken::Class),
-        |tokens, class| {
-            let (tokens, name) = expression(tokens, Precedence::None)?;
-            let (tokens, declaration) = class_declaration(tokens)?;
-            Ok((
-                tokens,
-                ClassDeclarationStatement {
-                    class,
-                    name: Box::new(name),
-                    declaration,
-                },
-            ))
-        },
-    )
+        })
+        .with_context_from(ContextType::ForeachStatement, tokens)
 }
 
 pub fn try_catch_statement(tokens: TokenList) -> ParseResult<TryCatchStatement> {
-    definitely(
-        tokens,
-        ContextType::TryCatchStatement,
-        |tokens| terminal(tokens, TerminalToken::Try),
-        |tokens, try_| {
-            let (tokens, body) = statement(tokens)?;
-            let (tokens, catch) = terminal(tokens, TerminalToken::Catch)?;
-            let (tokens, (open, catch_name, close)) = span(
+    tokens
+        .terminal(TerminalToken::Try)
+        .determines(|tokens, try_| {
+            let (tokens, body) = inner_statement(tokens).replace_context_from(
+                ContextType::BlockStatement,
+                ContextType::Span,
                 tokens,
-                ContextType::TryCatchStatement,
-                TerminalToken::OpenBracket,
-                TerminalToken::CloseBracket,
-                |tokens, open, close| {
-                    let (tokens, catch_name) = identifier(tokens)?;
-                    Ok((tokens, (open, catch_name, close)))
-                },
             )?;
-            let (tokens, catch_body) = statement(tokens)?;
+            let (tokens, catch) = tokens.terminal(TerminalToken::Catch)?;
+            let (tokens, (open, catch_name, close)) =
+                tokens.terminal(TerminalToken::OpenBracket).opens(
+                    ContextType::TryCatchStatementCatchName,
+                    |tokens| tokens.terminal(TerminalToken::CloseBracket),
+                    |tokens, open, close| {
+                        identifier(tokens).map_val(|catch_name| (open, catch_name, close))
+                    },
+                )?;
+            let (tokens, catch_body) = statement_type(tokens).replace_context_from(
+                ContextType::BlockStatement,
+                ContextType::Span,
+                tokens,
+            )?;
+
             Ok((
                 tokens,
                 TryCatchStatement {
@@ -509,67 +409,81 @@ pub fn try_catch_statement(tokens: TokenList) -> ParseResult<TryCatchStatement> 
                     catch_body: Box::new(catch_body),
                 },
             ))
-        },
-    )
+        })
+}
+
+pub fn break_statement(tokens: TokenList) -> ParseResult<BreakStatement> {
+    tokens
+        .terminal(TerminalToken::Break)
+        .map_val(|break_| BreakStatement { break_ })
+}
+
+pub fn continue_statement(tokens: TokenList) -> ParseResult<ContinueStatement> {
+    tokens
+        .terminal(TerminalToken::Continue)
+        .map_val(|continue_| ContinueStatement { continue_ })
+}
+
+pub fn return_statement(tokens: TokenList) -> ParseResult<ReturnStatement> {
+    tokens
+        .terminal(TerminalToken::Return)
+        .determines(|tokens, return_| {
+            // Value may appear after as long as it is on the same line.
+            let (tokens, value) = if tokens.is_newline() {
+                (tokens, None)
+            } else {
+                expression(tokens, Precedence::None).maybe(tokens)?
+            };
+
+            Ok((tokens, ReturnStatement { return_, value }))
+        })
+        .with_context_from(ContextType::ReturnStatement, tokens)
+}
+
+pub fn yield_statement(tokens: TokenList) -> ParseResult<YieldStatement> {
+    tokens
+        .terminal(TerminalToken::Yield)
+        .determines(|tokens, yield_| {
+            // Value may appear after as long as it is on the same line.
+            let (tokens, value) = if tokens.is_newline() {
+                (tokens, None)
+            } else {
+                expression(tokens, Precedence::None).maybe(tokens)?
+            };
+
+            Ok((tokens, YieldStatement { yield_, value }))
+        })
+        .with_context_from(ContextType::YieldStatement, tokens)
 }
 
 pub fn throw_statement(tokens: TokenList) -> ParseResult<ThrowStatement> {
-    definitely(
-        tokens,
-        ContextType::ThrowStatement,
-        |tokens| terminal(tokens, TerminalToken::Throw),
-        |tokens, throw| {
-            let (tokens, value) = expression(tokens, Precedence::None)?;
-            Ok((
-                tokens,
-                ThrowStatement {
-                    throw,
-                    value: Box::new(value),
-                },
-            ))
-        },
-    )
+    tokens
+        .terminal(TerminalToken::Throw)
+        .determines(|tokens, throw| {
+            expression(tokens, Precedence::None).map_val(|value| ThrowStatement { throw, value })
+        })
+        .with_context_from(ContextType::ThrowStatement, tokens)
 }
 
-pub fn const_statement(tokens: TokenList) -> ParseResult<ConstStatement> {
-    definitely(
-        tokens,
-        ContextType::ConstStatement,
-        |tokens| terminal(tokens, TerminalToken::Const),
-        |tokens, const_| {
-            alt(typed_const_statement(tokens, const_))
-                .unwrap_or_else(|| untyped_const_statement(tokens, const_))
-        },
-    )
+pub fn const_definition_statement(tokens: TokenList) -> ParseResult<ConstDefinitionStatement> {
+    tokens
+        .terminal(TerminalToken::Const)
+        .determines(|tokens, const_| {
+            untyped_const_definition_statement(tokens, const_)
+                .or_try(|| typed_const_definition_statement(tokens, const_))
+        })
+        .with_context_from(ContextType::ConstDefinition, tokens)
 }
 
-fn typed_const_statement<'s>(
+fn untyped_const_definition_statement<'s>(
     tokens: TokenList<'s>,
     const_: &'s Token<'s>,
-) -> ParseResult<'s, ConstStatement<'s>> {
-    let (tokens, const_type) = type_(tokens)?;
+) -> ParseResult<'s, ConstDefinitionStatement<'s>> {
     let (tokens, name) = identifier(tokens)?;
     let (tokens, initializer) = var_initializer(tokens)?;
     Ok((
         tokens,
-        ConstStatement {
-            const_,
-            const_type: Some(const_type),
-            name,
-            initializer,
-        },
-    ))
-}
-
-fn untyped_const_statement<'s>(
-    tokens: TokenList<'s>,
-    const_: &'s Token<'s>,
-) -> ParseResult<'s, ConstStatement<'s>> {
-    let (tokens, name) = identifier(tokens)?;
-    let (tokens, initializer) = var_initializer(tokens)?;
-    Ok((
-        tokens,
-        ConstStatement {
+        ConstDefinitionStatement {
             const_,
             const_type: None,
             name,
@@ -578,321 +492,295 @@ fn untyped_const_statement<'s>(
     ))
 }
 
-pub fn enum_statement(tokens: TokenList) -> ParseResult<EnumStatement> {
-    definitely(
-        tokens,
-        ContextType::EnumStatement,
-        |tokens| terminal(tokens, TerminalToken::Enum),
-        |tokens, enum_| {
-            let (tokens, name) = identifier(tokens)?;
-            span(
-                tokens,
-                ContextType::EnumStatement,
-                TerminalToken::OpenBrace,
-                TerminalToken::CloseBrace,
-                |tokens, open, close| {
-                    let (tokens, entries) = many(tokens, enum_entry)?;
-                    Ok((
-                        tokens,
-                        EnumStatement {
-                            enum_,
-                            name,
-                            open,
-                            entries,
-                            close,
-                        },
-                    ))
-                },
-            )
-        },
-    )
-}
-
-pub fn expression_statement(tokens: TokenList) -> ParseResult<ExpressionStatement> {
-    let (tokens, value) = expression(tokens, Precedence::None)?;
+fn typed_const_definition_statement<'s>(
+    tokens: TokenList<'s>,
+    const_: &'s Token<'s>,
+) -> ParseResult<'s, ConstDefinitionStatement<'s>> {
+    let (tokens, const_type) = type_(tokens)?;
+    let (tokens, name) = identifier(tokens)?;
+    let (tokens, initializer) = var_initializer(tokens)?;
     Ok((
         tokens,
-        ExpressionStatement {
-            value: Box::new(value),
+        ConstDefinitionStatement {
+            const_,
+            const_type: Some(const_type),
+            name,
+            initializer,
         },
     ))
 }
 
-pub fn constructor_declaration_statement(
-    tokens: TokenList,
-) -> ParseResult<ConstructorDeclarationStatement> {
-    definitely(
-        tokens,
-        ContextType::FunctionDeclarationStatement,
-        |tokens| {
-            let (tokens, function) = terminal(tokens, TerminalToken::Function)?;
-            let (tokens, mut last_name) = identifier(tokens)?;
-            let (mut tokens, mut last_namespace) = terminal(tokens, TerminalToken::Namespace)?;
-            let mut namespaces = Vec::new();
+pub fn class_definition_statement(tokens: TokenList) -> ParseResult<ClassDefinitionStatement> {
+    tokens
+        .terminal(TerminalToken::Class)
+        .determines(|tokens, class| {
+            let (tokens, name) = expression(tokens, Precedence::None)?;
+            let (tokens, definition) = class_definition(tokens)?;
 
-            while let (next_tokens, Some(next_name)) = opt(tokens, identifier(tokens))? {
-                let (next_tokens, next_namespace) =
-                    terminal(next_tokens, TerminalToken::Namespace)?;
-                namespaces.push((last_name, last_namespace));
-                last_name = next_name;
-                last_namespace = next_namespace;
-                tokens = next_tokens;
-            }
-
-            let (tokens, constructor) = terminal(tokens, TerminalToken::Constructor)?;
             Ok((
                 tokens,
-                (function, namespaces, last_name, last_namespace, constructor),
-            ))
-        },
-        |tokens, (function, namespaces, last_name, last_namespace, constructor)| {
-            let (tokens, declaration) = function_declaration(tokens)?;
-            Ok((
-                tokens,
-                ConstructorDeclarationStatement {
-                    function,
-                    namespaces,
-                    last_name,
-                    last_namespace,
-                    constructor,
-                    declaration,
+                ClassDefinitionStatement {
+                    class,
+                    name,
+                    definition,
                 },
             ))
-        },
-    )
+        })
+        .with_context_from(ContextType::ClassDefinition, tokens)
 }
 
-pub fn function_declaration_statement(
-    tokens: TokenList,
-) -> ParseResult<FunctionDeclarationStatement> {
-    definitely(
-        tokens,
-        ContextType::FunctionDeclarationStatement,
-        |tokens| {
-            let (tokens, return_type) = prevent_ending_line(
-                tokens,
-                opt(tokens, type_(tokens).map_err(|err| err.into_non_fatal())),
-            )?;
-            let (tokens, function) = terminal(tokens, TerminalToken::Function)?;
-            Ok((tokens, (return_type, function)))
-        },
-        |tokens, (return_type, function)| {
-            let (tokens, name) = separated_list1(tokens, identifier, |tokens| {
-                terminal(tokens, TerminalToken::Namespace)
-            })?;
-            let (tokens, declaration) = function_declaration(tokens)?;
+pub fn enum_definition_statement(tokens: TokenList) -> ParseResult<EnumDefinitionStatement> {
+    tokens
+        .terminal(TerminalToken::Enum)
+        .determines(|tokens, enum_| {
+            let (tokens, name) = identifier(tokens)?;
+            let (tokens, (open, entries, close)) =
+                tokens.terminal(TerminalToken::OpenBrace).opens(
+                    ContextType::Span,
+                    |tokens| tokens.terminal(TerminalToken::CloseBrace),
+                    |tokens, open, close| {
+                        tokens
+                            .many(enum_entry)
+                            .map_val(|entries| (open, entries, close))
+                    },
+                )?;
+
             Ok((
                 tokens,
-                FunctionDeclarationStatement {
-                    return_type,
+                EnumDefinitionStatement {
+                    enum_,
+                    name,
+                    open,
+                    entries,
+                    close,
+                },
+            ))
+        })
+        .with_context_from(ContextType::EnumDefinition, tokens)
+}
+
+pub fn typed_function_or_var_definition_statement(tokens: TokenList) -> ParseResult<StatementType> {
+    let (next_tokens, type_) = type_(tokens).not_definite()?;
+
+    match (
+        next_tokens.is_newline(),
+        next_tokens.terminal(TerminalToken::Function),
+    ) {
+        // Linebreak between a function return type and the function definition is not allowed.
+        (false, Ok((next_tokens, function))) => {
+            typed_function_definition_statement(next_tokens, type_, function)
+                .with_context_from(ContextType::FunctionDefinition, tokens)
+                .map_val(StatementType::FunctionDefinition)
+        }
+        (true, Ok(_)) => Err(next_tokens.error(ParseErrorType::IllegalLineBreak)),
+
+        // Linebreak between a variable type and the variable definition IS allowed. (??!)
+        (_, Err(_)) => typed_var_definition_statement(next_tokens, type_)
+            .with_context_from(ContextType::VarDefinition, tokens)
+            .map_val(StatementType::VarDefinition),
+    }
+}
+
+pub fn typed_function_definition_statement<'s>(
+    tokens: TokenList<'s>,
+    return_type: Type<'s>,
+    function: &'s Token<'s>,
+) -> ParseResult<'s, FunctionDefinitionStatement<'s>> {
+    tokens
+        .separated_list1(identifier, |tokens| {
+            tokens.terminal(TerminalToken::Namespace)
+        })
+        .determines(|tokens, name| {
+            let (tokens, definition) = function_definition(tokens)?;
+
+            Ok((
+                tokens,
+                FunctionDefinitionStatement {
+                    return_type: Some(return_type),
                     function,
                     name,
-                    declaration,
+                    definition,
                 },
             ))
-        },
-    )
+        })
 }
 
-pub fn var_declaration_statement(tokens: TokenList) -> ParseResult<VarDeclarationStatement> {
-    // Variable declaration statements are very vague syntactically. For better error reporting, we
-    // say a token stream is definitely a variable declaration statement if it has a type followed
-    // by an identifier. However once that's known we must parse the rest of the declarations,
-    // which involves some awkward shuffling.
-    definitely(
-        tokens,
-        ContextType::VarDeclarationStatement,
-        |tokens| {
-            let (tokens, ty) = type_(tokens).map_err(|err| err.into_non_fatal())?;
-            let (tokens, first_declaration) = var_declaration(tokens)?;
-            Ok((tokens, (ty, first_declaration)))
-        },
-        |tokens, (ty, first_declaration)| {
-            let (tokens, first_comma_maybe) = opt(tokens, terminal(tokens, TerminalToken::Comma))?;
-            let (tokens, declarations) = match first_comma_maybe {
-                Some(first_comma) => {
-                    let (tokens, declarations) =
-                        separated_list_trailing0(tokens, var_declaration, |tokens| {
-                            terminal(tokens, TerminalToken::Comma)
-                        })?;
-                    let declarations = match declarations {
-                        Some(mut declarations) => {
-                            declarations
-                                .items
-                                .insert(0, (first_declaration, first_comma));
-                            declarations
-                        }
-                        None => SeparatedListTrailing1 {
-                            items: Vec::new(),
-                            last_item: Box::new(first_declaration),
-                            trailing: Some(first_comma),
-                        },
-                    };
-                    (tokens, declarations)
-                }
-                None => (
+pub fn typed_var_definition_statement<'s>(
+    tokens: TokenList<'s>,
+    type_: Type<'s>,
+) -> ParseResult<'s, VarDefinitionStatement<'s>> {
+    identifier(tokens).determines(|tokens, name| {
+        let (tokens, initializer) = var_initializer(tokens).maybe(tokens)?;
+        let first_definition = VarDefinition { name, initializer };
+        let (tokens, definitions) =
+            tokens.separated_list_trailing1_init(first_definition, var_definition, |tokens| {
+                tokens.terminal(TerminalToken::Comma)
+            })?;
+
+        Ok((tokens, VarDefinitionStatement { type_, definitions }))
+    })
+}
+
+pub fn void_function_definition_statement(tokens: TokenList) -> ParseResult<StatementType> {
+    tokens
+        .terminal(TerminalToken::Function)
+        .and_then(|(tokens, function)| {
+            identifier(tokens).map_val(|first_name| (function, first_name))
+        })
+        .determines(|tokens, (function, first_name)| {
+            let (tokens, name) =
+                tokens.separated_list_trailing1_init(first_name, identifier, |tokens| {
+                    tokens.terminal(TerminalToken::Namespace)
+                })?;
+
+            // If the name has a trailing `::`, it must be followed by the constructor keyword.
+            // This allows out-of-band constructor definitions, e.g.:
+            // function MyClass::constructor() { ... }
+            if let Some(last_namespace) = name.trailing {
+                let (tokens, constructor) = tokens.terminal(TerminalToken::Constructor)?;
+                let (tokens, definition) = function_definition(tokens)?;
+                Ok((
                     tokens,
-                    SeparatedListTrailing1 {
-                        items: Vec::new(),
-                        last_item: Box::new(first_declaration),
-                        trailing: None,
-                    },
-                ),
-            };
-            Ok((tokens, VarDeclarationStatement { ty, declarations }))
-        },
-    )
+                    StatementType::ConstructorDefinition(ConstructorDefinitionStatement {
+                        function,
+                        namespaces: name.items,
+                        last_name: *name.last_item,
+                        last_namespace,
+                        constructor,
+                        definition,
+                    }),
+                ))
+            } else {
+                let (tokens, definition) = function_definition(tokens)?;
+                Ok((
+                    tokens,
+                    StatementType::FunctionDefinition(FunctionDefinitionStatement {
+                        return_type: None,
+                        function,
+                        name: SeparatedList1 {
+                            items: name.items,
+                            last_item: name.last_item,
+                        },
+                        definition,
+                    }),
+                ))
+            }
+        })
+        .with_context_from(ContextType::FunctionDefinition, tokens)
+}
+
+pub fn struct_definition_statement(tokens: TokenList) -> ParseResult<StructDefinitionStatement> {
+    tokens
+        .terminal(TerminalToken::Struct)
+        .determines(|tokens, struct_| {
+            let (tokens, name) = identifier(tokens)?;
+            let (tokens, definition) = struct_definition(tokens)?;
+            Ok((
+                tokens,
+                StructDefinitionStatement {
+                    struct_,
+                    name,
+                    definition,
+                },
+            ))
+        })
+        .with_context_from(ContextType::StructDefinition, tokens)
+}
+
+pub fn type_definition_statement(tokens: TokenList) -> ParseResult<TypeDefinitionStatement> {
+    tokens
+        .terminal(TerminalToken::Typedef)
+        .determines(|tokens, typedef| {
+            let (tokens, name) = identifier(tokens)?;
+            let (tokens, type_) = type_(tokens)?;
+            Ok((
+                tokens,
+                TypeDefinitionStatement {
+                    typedef,
+                    name,
+                    type_,
+                },
+            ))
+        })
+        .with_context_from(ContextType::TypeDefinition, tokens)
 }
 
 pub fn thread_statement(tokens: TokenList) -> ParseResult<ThreadStatement> {
-    definitely(
-        tokens,
-        ContextType::ThreadStatement,
-        |tokens| terminal(tokens, TerminalToken::Thread),
-        |tokens, thread| {
-            let (tokens, value) = expression(tokens, Precedence::None)?;
-            Ok((
-                tokens,
-                ThreadStatement {
-                    thread,
-                    value: Box::new(value),
-                },
-            ))
-        },
-    )
+    tokens
+        .terminal(TerminalToken::Thread)
+        .determines(|tokens, thread| {
+            expression(tokens, Precedence::None).map_val(|value| ThreadStatement { thread, value })
+        })
+        .with_context_from(ContextType::ThreadStatement, tokens)
 }
 
 pub fn delay_thread_statement(tokens: TokenList) -> ParseResult<DelayThreadStatement> {
-    definitely(
-        tokens,
-        ContextType::DelayThreadStatement,
-        |tokens| terminal(tokens, TerminalToken::DelayThread),
-        |tokens, delay_thread| {
-            let (tokens, (open, duration, close)) = span(
-                tokens,
-                ContextType::DelayThreadStatement,
-                TerminalToken::OpenBracket,
-                TerminalToken::CloseBracket,
-                |tokens, open, close| {
-                    let (tokens, duration) = expression(tokens, Precedence::None)?;
-                    Ok((tokens, (open, duration, close)))
-                },
-            )?;
+    tokens
+        .terminal(TerminalToken::DelayThread)
+        .determines(|tokens, delay_thread| {
+            let (tokens, (open, duration, close)) =
+                tokens.terminal(TerminalToken::OpenBracket).opens(
+                    ContextType::Span,
+                    |tokens| tokens.terminal(TerminalToken::CloseBracket),
+                    |tokens, open, close| {
+                        expression(tokens, Precedence::None).map_val(|value| (open, value, close))
+                    },
+                )?;
             let (tokens, value) = expression(tokens, Precedence::None)?;
             Ok((
                 tokens,
                 DelayThreadStatement {
                     delay_thread,
                     open,
-                    duration: Box::new(duration),
+                    duration,
                     close,
-                    value: Box::new(value),
+                    value,
                 },
             ))
-        },
-    )
+        })
+        .with_context_from(ContextType::DelayThreadStatement, tokens)
 }
 
 pub fn wait_thread_statement(tokens: TokenList) -> ParseResult<WaitThreadStatement> {
-    definitely(
-        tokens,
-        ContextType::WaitThreadStatement,
-        |tokens| terminal(tokens, TerminalToken::WaitThread),
-        |tokens, wait_thread| {
-            let (tokens, value) = expression(tokens, Precedence::None)?;
-            Ok((
-                tokens,
-                WaitThreadStatement {
-                    wait_thread,
-                    value: Box::new(value),
-                },
-            ))
-        },
-    )
+    tokens
+        .terminal(TerminalToken::WaitThread)
+        .determines(|tokens, wait_thread| {
+            expression(tokens, Precedence::None)
+                .map_val(|value| WaitThreadStatement { wait_thread, value })
+        })
+        .with_context_from(ContextType::WaitThreadStatement, tokens)
 }
 
 pub fn wait_statement(tokens: TokenList) -> ParseResult<WaitStatement> {
-    definitely(
-        tokens,
-        ContextType::WaitStatement,
-        |tokens| terminal(tokens, TerminalToken::Wait),
-        |tokens, wait| {
-            let (tokens, value) = expression(tokens, Precedence::None)?;
-            Ok((
-                tokens,
-                WaitStatement {
-                    wait,
-                    value: Box::new(value),
-                },
-            ))
-        },
-    )
-}
-
-pub fn struct_declaration_statement(tokens: TokenList) -> ParseResult<StructDeclarationStatement> {
-    definitely(
-        tokens,
-        ContextType::StructStatement,
-        |tokens| terminal(tokens, TerminalToken::Struct),
-        |tokens, struct_| {
-            let (tokens, name) = identifier(tokens)?;
-            let (tokens, declaration) = struct_declaration(tokens)?;
-            Ok((
-                tokens,
-                StructDeclarationStatement {
-                    struct_,
-                    name,
-                    declaration,
-                },
-            ))
-        },
-    )
-}
-
-pub fn typedef_statement(tokens: TokenList) -> ParseResult<TypedefStatement> {
-    definitely(
-        tokens,
-        ContextType::TypedefStatement,
-        |tokens| terminal(tokens, TerminalToken::Typedef),
-        |tokens, typedef| {
-            let (tokens, name) = identifier(tokens)?;
-            let (tokens, ty) = type_(tokens)?;
-            Ok((tokens, TypedefStatement { typedef, name, ty }))
-        },
-    )
+    tokens
+        .terminal(TerminalToken::Wait)
+        .determines(|tokens, wait| {
+            expression(tokens, Precedence::None).map_val(|value| WaitStatement { wait, value })
+        })
+        .with_context_from(ContextType::WaitStatement, tokens)
 }
 
 pub fn global_statement(tokens: TokenList) -> ParseResult<GlobalStatement> {
-    definitely(
-        tokens,
-        ContextType::GlobalStatement,
-        |tokens| terminal(tokens, TerminalToken::Global),
-        |tokens, global| {
-            let (tokens, declaration) = global_declaration(tokens)?;
-            Ok((
-                tokens,
-                GlobalStatement {
-                    global,
-                    declaration,
-                },
-            ))
-        },
-    )
+    tokens
+        .terminal(TerminalToken::Global)
+        .determines(|tokens, global| {
+            global_definition(tokens).map_val(|definition| GlobalStatement { global, definition })
+        })
+        .with_context_from(ContextType::GlobalStatement, tokens)
 }
 
 pub fn globalize_all_functions_statement(
     tokens: TokenList,
 ) -> ParseResult<GlobalizeAllFunctionsStatement> {
-    let (tokens, globalize_all_functions) = terminal(tokens, TerminalToken::GlobalizeAllFunctions)?;
-    Ok((
-        tokens,
-        GlobalizeAllFunctionsStatement {
+    tokens
+        .terminal(TerminalToken::GlobalizeAllFunctions)
+        .map_val(|globalize_all_functions| GlobalizeAllFunctionsStatement {
             globalize_all_functions,
-        },
-    ))
+        })
 }
 
 pub fn untyped_statement(tokens: TokenList) -> ParseResult<UntypedStatement> {
-    let (tokens, untyped) = terminal(tokens, TerminalToken::Untyped)?;
-    Ok((tokens, UntypedStatement { untyped }))
+    tokens
+        .terminal(TerminalToken::Untyped)
+        .map_val(|untyped| UntypedStatement { untyped })
 }

@@ -1,11 +1,11 @@
 use crate::ast::{Expression, Identifier};
 use crate::token::Token;
 
-/// Variable declaration with an optional initializer.
+/// Variable definition with an optional initializer.
 ///
 /// Grammar: [Identifier] [VarInitializer]?
 #[derive(Debug, Clone)]
-pub struct VarDeclaration<'s> {
+pub struct VarDefinition<'s> {
     pub name: Identifier<'s>,
     pub initializer: Option<VarInitializer<'s>>,
 }

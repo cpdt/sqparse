@@ -1,22 +1,23 @@
 use crate::ast::{
-    Expression, Identifier, SeparatedList1, SeparatedListTrailing0, Statement, Type, VarInitializer,
+    Expression, Identifier, SeparatedList1, SeparatedListTrailing0, StatementType, Type,
+    VarInitializer,
 };
 use crate::token::Token;
 
-/// Anonymous function declaration in a function literal, function definition, class method, or table function.
+/// Anonymous function definition in a function literal, function definition, class method, or table function.
 ///
-/// Grammar: [FunctionEnvironment]? `(` [FunctionArgs] `)` [FunctionCaptures]? [Statement]
+/// Grammar: [FunctionEnvironment]? `(` [FunctionParams] `)` [FunctionCaptures]? [StatementType]
 #[derive(Debug, Clone)]
-pub struct FunctionDeclaration<'s> {
+pub struct FunctionDefinition<'s> {
     pub environment: Option<FunctionEnvironment<'s>>,
     pub open: &'s Token<'s>,
-    pub args: FunctionArgs<'s>,
+    pub params: FunctionParams<'s>,
     pub close: &'s Token<'s>,
     pub captures: Option<FunctionCaptures<'s>>,
-    pub body: Box<Statement<'s>>,
+    pub body: Box<StatementType<'s>>,
 }
 
-/// Environment that is bound to a [`FunctionDeclaration`].
+/// Environment that is bound to a [`FunctionDefinition`].
 ///
 /// Grammar: `[` [Expression] `]`
 #[derive(Debug, Clone)]
@@ -26,14 +27,14 @@ pub struct FunctionEnvironment<'s> {
     pub close: &'s Token<'s>,
 }
 
-/// Argument declarations in a [`FunctionDeclaration`].
+/// Parameter definition in a [`FunctionDefinition`].
 #[derive(Debug, Clone)]
-pub enum FunctionArgs<'s> {
+pub enum FunctionParams<'s> {
     /// Non-variable argument list.
     ///
-    /// Grammar: [SeparatedListTrailing0]<[FunctionArg] `,`>
+    /// Grammar: [SeparatedListTrailing0]<[FunctionParam] `,`>
     NonVariable {
-        args: SeparatedListTrailing0<'s, FunctionArg<'s>>,
+        params: SeparatedListTrailing0<'s, FunctionParam<'s>>,
     },
 
     /// Variable-length argument list with no named arguments.
@@ -43,25 +44,25 @@ pub enum FunctionArgs<'s> {
 
     /// Variable-length argument list with some named arguments.
     ///
-    /// Grammar: [SeparatedList1]<[FunctionArg] `,`> `,` `...`
+    /// Grammar: [SeparatedList1]<[FunctionParam] `,`> `,` `...`
     NonEmptyVariable {
-        args: SeparatedList1<'s, FunctionArg<'s>>,
+        params: SeparatedList1<'s, FunctionParam<'s>>,
         comma: &'s Token<'s>,
         vararg: &'s Token<'s>,
     },
 }
 
-/// Argument declaration in a [`FunctionArgs`] list.
+/// Parameter definition in a [`FunctionParams`] list.
 ///
 /// Grammar: [Type]? [Identifier] [VarInitializer]?
 #[derive(Debug, Clone)]
-pub struct FunctionArg<'s> {
-    pub ty: Option<Type<'s>>,
+pub struct FunctionParam<'s> {
+    pub type_: Option<Type<'s>>,
     pub name: Identifier<'s>,
     pub initializer: Option<VarInitializer<'s>>,
 }
 
-/// List of captured variables (aka free variables) in a [`FunctionDeclaration`].
+/// List of captured variables (aka free variables) in a [`FunctionDefinition`].
 ///
 /// Grammar: `:` `(` [SeparatedListTrailing0]<[Identifier] `,`> `)`
 #[derive(Debug, Clone)]
@@ -72,14 +73,14 @@ pub struct FunctionCaptures<'s> {
     pub close: &'s Token<'s>,
 }
 
-/// Argument declaration in a [`FunctionRefType`].
+/// Parameter definition in a [`FunctionRefType`].
 ///
 /// Grammar: [Type] [Identifier]? [VarInitializer]?
 ///
 /// [`FunctionRefType`]: crate::ast::FunctionRefType
 #[derive(Debug, Clone)]
-pub struct FunctionRefArg<'s> {
-    pub ty: Type<'s>,
+pub struct FunctionRefParam<'s> {
+    pub type_: Type<'s>,
     pub name: Option<Identifier<'s>>,
     pub initializer: Option<VarInitializer<'s>>,
 }

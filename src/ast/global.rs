@@ -1,6 +1,6 @@
 use crate::ast::{
-    ClassDeclarationStatement, ConstStatement, EnumStatement, Identifier, SeparatedList1,
-    StructDeclarationStatement, TypedefStatement, VarDeclarationStatement, VarInitializer,
+    ClassDefinitionStatement, ConstDefinitionStatement, EnumDefinitionStatement, Identifier,
+    StructDefinitionStatement, TypeDefinitionStatement, VarDefinitionStatement, VarInitializer,
 };
 use crate::token::Token;
 
@@ -8,13 +8,13 @@ use crate::token::Token;
 ///
 /// [`GlobalStatement`]: crate::ast::GlobalStatement
 #[derive(Debug, Clone)]
-pub enum GlobalDeclaration<'s> {
+pub enum GlobalDefinition<'s> {
     /// Global function.
     ///
-    /// Grammar: `function` [SeparatedList1]<[Identifier] `::`>
+    /// Grammar: `function` [Identifier]
     Function {
         function: &'s Token<'s>,
-        name: SeparatedList1<'s, Identifier<'s>>,
+        name: Identifier<'s>,
     },
 
     /// Global untyped variable.
@@ -27,31 +27,31 @@ pub enum GlobalDeclaration<'s> {
 
     /// Global typed variable.
     ///
-    /// Grammar: [VarDeclarationStatement]
-    TypedVar(VarDeclarationStatement<'s>),
+    /// Grammar: [VarDefinitionStatement]
+    TypedVar(VarDefinitionStatement<'s>),
 
     /// Global constant.
     ///
-    /// Grammar: [ConstStatement]
-    Const(ConstStatement<'s>),
+    /// Grammar: [ConstDefinitionStatement]
+    Const(ConstDefinitionStatement<'s>),
 
     /// Global enum.
     ///
-    /// Grammar: [EnumStatement]
-    Enum(EnumStatement<'s>),
+    /// Grammar: [EnumDefinitionStatement]
+    Enum(EnumDefinitionStatement<'s>),
 
-    /// Global class declaration.
+    /// Global class definition.
     ///
-    /// Grammar: [ClassDeclarationStatement]
-    Class(ClassDeclarationStatement<'s>),
+    /// Grammar: [ClassDefinitionStatement]
+    Class(ClassDefinitionStatement<'s>),
 
-    /// Global struct declaration.
+    /// Global struct definition.
     ///
-    /// Grammar: [StructDeclarationStatement]
-    Struct(StructDeclarationStatement<'s>),
+    /// Grammar: [StructDefinitionStatement]
+    Struct(StructDefinitionStatement<'s>),
 
     /// Global type definition.
     ///
-    /// Grammar: [TypedefStatement]
-    Type(TypedefStatement<'s>),
+    /// Grammar: [TypeDefinitionStatement]
+    Type(TypeDefinitionStatement<'s>),
 }

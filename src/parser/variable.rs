@@ -1,32 +1,22 @@
-use crate::ast::{Precedence, VarDeclaration, VarInitializer};
-use crate::parser::combinator::{definitely, opt};
+use crate::ast::{Precedence, VarDefinition, VarInitializer};
 use crate::parser::expression::expression;
 use crate::parser::identifier::identifier;
-use crate::parser::token::terminal;
-use crate::parser::{ContextType, ParseResult, TokenList};
+use crate::parser::parse_result_ext::ParseResultExt;
+use crate::parser::token_list::TokenList;
+use crate::parser::token_list_ext::TokenListExt;
+use crate::parser::ParseResult;
 use crate::token::TerminalToken;
 
-pub fn var_declaration(tokens: TokenList) -> ParseResult<VarDeclaration> {
+pub fn var_definition(tokens: TokenList) -> ParseResult<VarDefinition> {
     let (tokens, name) = identifier(tokens)?;
-    let (tokens, initializer) = opt(tokens, var_initializer(tokens))?;
-
-    Ok((tokens, VarDeclaration { name, initializer }))
+    let (tokens, initializer) = var_initializer(tokens).maybe(tokens)?;
+    Ok((tokens, VarDefinition { name, initializer }))
 }
 
 pub fn var_initializer(tokens: TokenList) -> ParseResult<VarInitializer> {
-    definitely(
-        tokens,
-        ContextType::VarInitializer,
-        |tokens| terminal(tokens, TerminalToken::Assign),
-        |tokens, assign| {
-            let (tokens, value) = expression(tokens, Precedence::Comma)?;
-            Ok((
-                tokens,
-                VarInitializer {
-                    assign,
-                    value: Box::new(value),
-                },
-            ))
-        },
-    )
+    tokens
+        .terminal(TerminalToken::Assign)
+        .determines(|tokens, assign| {
+            expression(tokens, Precedence::Comma).map_val(|value| VarInitializer { assign, value })
+        })
 }

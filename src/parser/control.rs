@@ -1,117 +1,120 @@
 use crate::ast::{
-    ForDeclaration, ForeachIndex, Identifier, IfElse, Precedence, SwitchCase, SwitchCaseCondition,
-    Type,
+    ForDefinition, ForeachIndex, Identifier, IfStatementType, Precedence, Statement, SwitchCase,
+    SwitchCaseCondition, Type,
 };
-use crate::parser::combinator::{alt, definitely};
 use crate::parser::expression::expression;
 use crate::parser::identifier::identifier;
-use crate::parser::list::many;
-use crate::parser::statement::{statement, var_declaration_statement};
-use crate::parser::token::terminal;
+use crate::parser::parse_result_ext::ParseResultExt;
+use crate::parser::statement::{statement, statement_type, typed_var_definition_statement};
+use crate::parser::token_list::TokenList;
+use crate::parser::token_list_ext::TokenListExt;
 use crate::parser::type_::type_;
-use crate::parser::{ContextType, ParseResult, TokenList};
+use crate::parser::ParseResult;
 use crate::token::{TerminalToken, Token};
+use crate::ContextType;
 
-pub fn if_else(tokens: TokenList) -> ParseResult<IfElse> {
-    definitely(
-        tokens,
-        ContextType::ElseStatement,
-        |tokens| terminal(tokens, TerminalToken::Else),
-        |tokens, else_| {
-            let (tokens, body) = statement(tokens)?;
-            Ok((
-                tokens,
-                IfElse {
-                    else_,
-                    body: Box::new(body),
-                },
-            ))
-        },
-    )
-}
+pub fn if_statement_type(tokens: TokenList) -> ParseResult<IfStatementType> {
+    let (tokens, body) = statement_type(tokens)?;
 
-pub fn switch_case(tokens: TokenList) -> ParseResult<SwitchCase> {
-    let (tokens, condition) = switch_case_condition(tokens)?;
-    let (tokens, colon) = terminal(tokens, TerminalToken::Colon)?;
-    let (tokens, body) = many(tokens, statement)?;
+    // Consume a `;` if this is followed by an `else`.
+    let (next_tokens, semicolon) = tokens.terminal(TerminalToken::Semicolon).maybe(tokens)?;
+
+    let Ok((tokens, else_)) = next_tokens.terminal(TerminalToken::Else) else {
+        // Return the body WITHOUT consuming the `;`.
+        return Ok((tokens, IfStatementType::NoElse { body: Box::new(body) }))
+    };
+
+    let (tokens, else_body) = statement_type(tokens).definite()?;
     Ok((
         tokens,
-        SwitchCase {
-            condition,
-            colon,
-            body,
+        IfStatementType::Else {
+            body: Box::new(Statement {
+                ty: body,
+                semicolon,
+            }),
+            else_,
+            else_body: Box::new(else_body),
         },
     ))
 }
 
-pub fn switch_case_condition(tokens: TokenList) -> ParseResult<SwitchCaseCondition> {
-    if let Ok((tokens, default)) = terminal(tokens, TerminalToken::Default) {
-        return Ok((tokens, SwitchCaseCondition::Default { default }));
-    }
-
-    definitely(
-        tokens,
-        ContextType::SwitchCaseCondition,
-        |tokens| terminal(tokens, TerminalToken::Case),
-        |tokens, case| {
-            let (tokens, value) = expression(tokens, Precedence::None)?;
-            Ok((
-                tokens,
-                SwitchCaseCondition::Case {
-                    case,
-                    value: Box::new(value),
-                },
-            ))
-        },
-    )
+pub fn switch_case(tokens: TokenList) -> ParseResult<SwitchCase> {
+    switch_case_condition(tokens).determines(|tokens, condition| {
+        let (tokens, colon) = tokens.terminal(TerminalToken::Colon)?;
+        let (tokens, body) = tokens.many(statement)?;
+        Ok((
+            tokens,
+            SwitchCase {
+                condition,
+                colon,
+                body,
+            },
+        ))
+    })
 }
 
-pub fn for_declaration(tokens: TokenList) -> ParseResult<ForDeclaration> {
-    // Weird hack:
-    // We need to try parsing a VarDeclarationStatement first since otherwise the Expression can
-    // falsely fail too early by parsing a type as an Expression::Var. However we want to propagate
-    // errors from the declaration statement if both fail, since a type syntax error is more useful
-    // there.
-    let declaration_err = match var_declaration_statement(tokens) {
-        Ok((tokens, declaration)) => return Ok((tokens, ForDeclaration::Declaration(declaration))),
-        Err(err) if err.is_fatal => return Err(err),
-        Err(err) => err,
-    };
+pub fn switch_case_condition(tokens: TokenList) -> ParseResult<SwitchCaseCondition> {
+    default_switch_case_condition(tokens).or_try(|| case_switch_case_condition(tokens))
+}
 
-    match expression(tokens, Precedence::None) {
-        Ok((tokens, expression)) => Ok((tokens, ForDeclaration::Expression(Box::new(expression)))),
-        Err(err) if err.is_fatal => Err(err),
+fn default_switch_case_condition(tokens: TokenList) -> ParseResult<SwitchCaseCondition> {
+    tokens
+        .terminal(TerminalToken::Default)
+        .map_val(|default| SwitchCaseCondition::Default { default })
+}
 
-        // Swap in the var declaration's error.
-        Err(_) => Err(declaration_err),
-    }
+fn case_switch_case_condition(tokens: TokenList) -> ParseResult<SwitchCaseCondition> {
+    tokens
+        .terminal(TerminalToken::Case)
+        .determines(|tokens, case| {
+            let (tokens, value) = expression(tokens, Precedence::None)?;
+            Ok((tokens, SwitchCaseCondition::Case { case, value }))
+        })
+}
+
+pub fn for_definition(tokens: TokenList) -> ParseResult<ForDefinition> {
+    var_for_definition(tokens).or_try(|| expression_for_definition(tokens))
+}
+
+fn var_for_definition(tokens: TokenList) -> ParseResult<ForDefinition> {
+    type_(tokens)
+        .not_definite()
+        .and_then(|(tokens, type_)| typed_var_definition_statement(tokens, type_))
+        .with_context_from(ContextType::VarDefinition, tokens)
+        .map_val(ForDefinition::Definition)
+}
+
+fn expression_for_definition(tokens: TokenList) -> ParseResult<ForDefinition> {
+    expression(tokens, Precedence::None)
+        .with_context_from(ContextType::Expression, tokens)
+        .map_val(ForDefinition::Expression)
 }
 
 pub fn foreach_index(tokens: TokenList) -> ParseResult<ForeachIndex> {
-    alt(typed_foreach_index(tokens)).unwrap_or_else(|| untyped_foreach_index(tokens))
+    untyped_foreach_index(tokens).or_try(|| typed_foreach_index(tokens))
 }
 
-fn typed_foreach_index(tokens: TokenList) -> ParseResult<ForeachIndex> {
-    let (tokens, ty) = type_(tokens).map_err(|err| err.into_non_fatal())?;
+fn untyped_foreach_index(tokens: TokenList) -> ParseResult<ForeachIndex> {
     let (tokens, name) = identifier(tokens)?;
-    let (tokens, comma) = terminal(tokens, TerminalToken::Comma)?;
+    let (tokens, comma) = tokens.terminal(TerminalToken::Comma)?;
     Ok((
         tokens,
         ForeachIndex {
-            ty: Some(ty),
+            type_: None,
             name,
             comma,
         },
     ))
 }
 
-fn untyped_foreach_index(tokens: TokenList) -> ParseResult<ForeachIndex> {
+fn typed_foreach_index(tokens: TokenList) -> ParseResult<ForeachIndex> {
+    let (tokens, type_) = type_(tokens)?;
     let (tokens, name) = identifier(tokens)?;
-    let (tokens, comma) = terminal(tokens, TerminalToken::Comma)?;
+    let (tokens, comma) = tokens.terminal(TerminalToken::Comma)?;
     Ok((
         tokens,
         ForeachIndex {
-            ty: None,
+            type_: Some(type_),
             name,
             comma,
         },
@@ -119,18 +122,20 @@ fn untyped_foreach_index(tokens: TokenList) -> ParseResult<ForeachIndex> {
 }
 
 pub fn foreach_value(tokens: TokenList) -> ParseResult<(Option<Type>, Identifier, &Token)> {
-    alt(typed_foreach_value(tokens)).unwrap_or_else(|| untyped_foreach_value(tokens))
+    untyped_foreach_value(tokens).or_try(|| typed_foreach_value(tokens))
 }
 
 fn typed_foreach_value(tokens: TokenList) -> ParseResult<(Option<Type>, Identifier, &Token)> {
-    let (tokens, ty) = type_(tokens).map_err(|err| err.into_non_fatal())?;
-    let (tokens, name) = identifier(tokens)?;
-    let (tokens, in_) = terminal(tokens, TerminalToken::In)?;
-    Ok((tokens, (Some(ty), name, in_)))
+    type_(tokens)
+        .and_then(|(tokens, type_)| identifier(tokens).map_val(|name| (type_, name)))
+        .determines(|tokens, (type_, name)| {
+            let (tokens, in_) = tokens.terminal(TerminalToken::In)?;
+            Ok((tokens, (Some(type_), name, in_)))
+        })
 }
 
 fn untyped_foreach_value(tokens: TokenList) -> ParseResult<(Option<Type>, Identifier, &Token)> {
     let (tokens, name) = identifier(tokens)?;
-    let (tokens, in_) = terminal(tokens, TerminalToken::In)?;
+    let (tokens, in_) = tokens.terminal(TerminalToken::In)?;
     Ok((tokens, (None, name, in_)))
 }

@@ -1,6 +1,5 @@
 mod array;
 mod class;
-mod combinator;
 mod context;
 mod control;
 mod enum_;
@@ -9,13 +8,14 @@ mod expression;
 mod function;
 mod global;
 mod identifier;
-mod list;
 mod operator;
+mod parse_result_ext;
+mod slot;
 mod statement;
 mod struct_;
 mod table;
-mod token;
 mod token_list;
+mod token_list_ext;
 mod type_;
 mod variable;
 

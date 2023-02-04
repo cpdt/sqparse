@@ -1,7 +1,6 @@
 use crate::ast::{
-    ArrayValue, BinaryOperator, ClassDeclaration, FunctionDeclaration, Identifier,
-    MethodIdentifier, PostfixOperator, PrefixOperator, SeparatedList1, SeparatedListTrailing0,
-    TableSlot, Type,
+    ArrayValue, BinaryOperator, ClassDefinition, FunctionDefinition, Identifier, MethodIdentifier,
+    PostfixOperator, PrefixOperator, SeparatedList1, SeparatedListTrailing0, TableSlot, Type,
 };
 use crate::token::{LiteralToken, Token};
 
@@ -92,11 +91,11 @@ pub struct TableExpression<'s> {
 
 /// A class literal.
 ///
-/// Grammar: `class` [ClassDeclaration]
+/// Grammar: `class` [ClassDefinition]
 #[derive(Debug, Clone)]
 pub struct ClassExpression<'s> {
     pub class: &'s Token<'s>,
-    pub declaration: ClassDeclaration<'s>,
+    pub definition: ClassDefinition<'s>,
 }
 
 /// An array literal.
@@ -112,12 +111,12 @@ pub struct ArrayExpression<'s> {
 
 /// A function literal.
 ///
-/// Grammar: [Type]? `function` [FunctionDeclaration]
+/// Grammar: [Type]? `function` [FunctionDefinition]
 #[derive(Debug, Clone)]
 pub struct FunctionExpression<'s> {
     pub return_type: Option<Type<'s>>,
     pub function: &'s Token<'s>,
-    pub declaration: FunctionDeclaration<'s>,
+    pub definition: FunctionDefinition<'s>,
 }
 
 /// A delegate expression.

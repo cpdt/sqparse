@@ -1,39 +1,42 @@
 use crate::ast::{
-    FunctionArg, FunctionArgs, FunctionCaptures, FunctionDeclaration, FunctionEnvironment,
-    FunctionRefArg, Precedence, SeparatedList1,
+    FunctionCaptures, FunctionDefinition, FunctionEnvironment, FunctionParam, FunctionParams,
+    FunctionRefParam, Precedence, SeparatedList1,
 };
-use crate::parser::combinator::{alt, definitely, opt, span};
 use crate::parser::expression::expression;
 use crate::parser::identifier::identifier;
-use crate::parser::list::separated_list_trailing0;
-use crate::parser::statement::statement;
-use crate::parser::token::terminal;
+use crate::parser::parse_result_ext::ParseResultExt;
+use crate::parser::statement::statement_type;
+use crate::parser::token_list::TokenList;
+use crate::parser::token_list_ext::TokenListExt;
 use crate::parser::type_::type_;
 use crate::parser::variable::var_initializer;
-use crate::parser::{ContextType, ParseResult, TokenList};
+use crate::parser::ParseResult;
 use crate::token::TerminalToken;
+use crate::ContextType;
 
-pub fn function_declaration(tokens: TokenList) -> ParseResult<FunctionDeclaration> {
-    let (tokens, environment) = opt(tokens, function_environment(tokens))?;
-    let (tokens, (open, args, close)) = span(
-        tokens,
-        ContextType::FunctionDeclarationArgs,
-        TerminalToken::OpenBracket,
-        TerminalToken::CloseBracket,
+pub fn function_definition(tokens: TokenList) -> ParseResult<FunctionDefinition> {
+    let (tokens, environment) = function_environment(tokens).maybe(tokens)?;
+    let (tokens, (open, params, close)) = tokens.terminal(TerminalToken::OpenBracket).opens(
+        ContextType::FunctionParamList,
+        |tokens| tokens.terminal(TerminalToken::CloseBracket),
         |tokens, open, close| {
-            let (tokens, args) = function_args(tokens)?;
-            Ok((tokens, (open, args, close)))
+            let (tokens, params) = function_params(tokens)?;
+            Ok((tokens, (open, params, close)))
         },
     )?;
-    let (tokens, captures) = opt(tokens, function_captures(tokens))?;
-    let (tokens, body) = statement(tokens)?;
+    let (tokens, captures) = function_captures(tokens).maybe(tokens)?;
+    let (tokens, body) = statement_type(tokens).replace_context_from(
+        ContextType::BlockStatement,
+        ContextType::Span,
+        tokens,
+    )?;
 
     Ok((
         tokens,
-        FunctionDeclaration {
+        FunctionDefinition {
             environment,
             open,
-            args,
+            params,
             close,
             captures,
             body: Box::new(body),
@@ -42,46 +45,36 @@ pub fn function_declaration(tokens: TokenList) -> ParseResult<FunctionDeclaratio
 }
 
 pub fn function_environment(tokens: TokenList) -> ParseResult<FunctionEnvironment> {
-    span(
-        tokens,
-        ContextType::FunctionDeclarationEnvironment,
-        TerminalToken::OpenSquare,
-        TerminalToken::CloseSquare,
+    tokens.terminal(TerminalToken::OpenSquare).opens(
+        ContextType::FunctionEnvironment,
+        |tokens| tokens.terminal(TerminalToken::CloseSquare),
         |tokens, open, close| {
             let (tokens, value) = expression(tokens, Precedence::None)?;
-            Ok((
-                tokens,
-                FunctionEnvironment {
-                    open,
-                    value: Box::new(value),
-                    close,
-                },
-            ))
+            Ok((tokens, FunctionEnvironment { open, value, close }))
         },
     )
 }
 
-pub fn function_args(tokens: TokenList) -> ParseResult<FunctionArgs> {
-    let (tokens, maybe_list) = separated_list_trailing0(tokens, function_arg, |tokens| {
-        terminal(tokens, TerminalToken::Comma)
+pub fn function_params(tokens: TokenList) -> ParseResult<FunctionParams> {
+    let (tokens, maybe_list) = tokens.separated_list_trailing0(function_param, |tokens| {
+        tokens.terminal(TerminalToken::Comma)
     })?;
+
     let Some(list) = maybe_list else {
-        // If there are no arguments, the function can still be variable without requiring a
-        // trailing comma.
-        return match terminal(tokens, TerminalToken::Ellipsis) {
-            Ok((tokens, vararg)) => Ok((tokens, FunctionArgs::EmptyVariable { vararg })),
-            Err(_) => Ok((tokens, FunctionArgs::NonVariable { args: None }))
+        // There are no arguments. The function can still be variable.
+        return match tokens.terminal(TerminalToken::Ellipsis) {
+            Ok((tokens, vararg)) => Ok((tokens, FunctionParams::EmptyVariable { vararg })),
+            Err(_) => Ok((tokens, FunctionParams::NonVariable { params: None }))
         };
     };
 
-    // If the list has a trailing comma, it can also have a vararg.
+    // If the list has a trailing comma, it can also be variable.
     if let Some(comma) = list.trailing {
-        let (tokens, vararg) = opt(tokens, terminal(tokens, TerminalToken::Ellipsis))?;
-        if let Some(vararg) = vararg {
+        if let Ok((tokens, vararg)) = tokens.terminal(TerminalToken::Ellipsis) {
             return Ok((
                 tokens,
-                FunctionArgs::NonEmptyVariable {
-                    args: SeparatedList1 {
+                FunctionParams::NonEmptyVariable {
+                    params: SeparatedList1 {
                         items: list.items,
                         last_item: list.last_item,
                     },
@@ -92,81 +85,80 @@ pub fn function_args(tokens: TokenList) -> ParseResult<FunctionArgs> {
         }
     }
 
-    Ok((tokens, FunctionArgs::NonVariable { args: Some(list) }))
+    Ok((tokens, FunctionParams::NonVariable { params: Some(list) }))
 }
 
-pub fn function_arg(tokens: TokenList) -> ParseResult<FunctionArg> {
-    alt(typed_function_arg(tokens)).unwrap_or_else(|| untyped_function_arg(tokens))
+pub fn function_param(tokens: TokenList) -> ParseResult<FunctionParam> {
+    typed_function_param(tokens).or_try(|| untyped_function_param(tokens))
 }
 
-fn typed_function_arg(tokens: TokenList) -> ParseResult<FunctionArg> {
-    let (tokens, ty) = type_(tokens)?;
-    let (tokens, name) = identifier(tokens)?;
-    let (tokens, initializer) = opt(tokens, var_initializer(tokens))?;
-
-    Ok((
-        tokens,
-        FunctionArg {
-            ty: Some(ty),
-            name,
-            initializer,
-        },
-    ))
+fn typed_function_param(tokens: TokenList) -> ParseResult<FunctionParam> {
+    type_(tokens)
+        .and_then(|(tokens, type_)| identifier(tokens).map_val(|name| (type_, name)))
+        .determines(|tokens, (type_, name)| {
+            let (tokens, initializer) = var_initializer(tokens).maybe(tokens)?;
+            Ok((
+                tokens,
+                FunctionParam {
+                    type_: Some(type_),
+                    name,
+                    initializer,
+                },
+            ))
+        })
 }
 
-fn untyped_function_arg(tokens: TokenList) -> ParseResult<FunctionArg> {
-    let (tokens, name) = identifier(tokens)?;
-    let (tokens, initializer) = opt(tokens, var_initializer(tokens))?;
-
-    Ok((
-        tokens,
-        FunctionArg {
-            ty: None,
-            name,
-            initializer,
-        },
-    ))
+fn untyped_function_param(tokens: TokenList) -> ParseResult<FunctionParam> {
+    identifier(tokens).determines(|tokens, name| {
+        let (tokens, initializer) = var_initializer(tokens).maybe(tokens)?;
+        Ok((
+            tokens,
+            FunctionParam {
+                type_: None,
+                name,
+                initializer,
+            },
+        ))
+    })
 }
 
 pub fn function_captures(tokens: TokenList) -> ParseResult<FunctionCaptures> {
-    definitely(
-        tokens,
-        ContextType::FunctionDeclarationCaptures,
-        |tokens| terminal(tokens, TerminalToken::Colon),
-        |tokens, colon| {
-            span(
+    tokens
+        .terminal(TerminalToken::Colon)
+        .determines(|tokens, colon| {
+            let (tokens, (open, names, close)) =
+                tokens.terminal(TerminalToken::OpenBracket).opens(
+                    ContextType::FunctionCaptureList,
+                    |tokens| tokens.terminal(TerminalToken::CloseBracket),
+                    |tokens, open, close| {
+                        tokens
+                            .separated_list_trailing0(identifier, |tokens| {
+                                tokens.terminal(TerminalToken::Comma)
+                            })
+                            .map_val(|names| (open, names, close))
+                    },
+                )?;
+
+            Ok((
                 tokens,
-                ContextType::FunctionDeclarationCaptures,
-                TerminalToken::OpenBracket,
-                TerminalToken::CloseBracket,
-                |tokens, open, close| {
-                    let (tokens, names) = separated_list_trailing0(tokens, identifier, |tokens| {
-                        terminal(tokens, TerminalToken::Comma)
-                    })?;
-                    Ok((
-                        tokens,
-                        FunctionCaptures {
-                            colon,
-                            open,
-                            names,
-                            close,
-                        },
-                    ))
+                FunctionCaptures {
+                    colon,
+                    open,
+                    names,
+                    close,
                 },
-            )
-        },
-    )
+            ))
+        })
 }
 
-pub fn function_ref_arg(tokens: TokenList) -> ParseResult<FunctionRefArg> {
-    let (tokens, ty) = type_(tokens)?;
-    let (tokens, name) = opt(tokens, identifier(tokens))?;
-    let (tokens, initializer) = opt(tokens, var_initializer(tokens))?;
-
+pub fn function_ref_param(tokens: TokenList) -> ParseResult<FunctionRefParam> {
+    let (tokens, type_) = type_(tokens)?;
+    let (tokens, name) = identifier(tokens).maybe(tokens)?;
+    let (tokens, initializer) = var_initializer(tokens).maybe(tokens)?;
     Ok((
         tokens,
-        FunctionRefArg {
-            ty,
+        FunctionRefParam {
+            type_,
             name,
             initializer,
         },

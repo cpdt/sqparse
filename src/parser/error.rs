@@ -8,9 +8,6 @@ use std::ops::Range;
 /// Implements [`std::fmt::Display`] to write a useful error message.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ParseErrorType {
-    /// An internal unexpected error occurred. This is a bug.
-    Internal(InternalErrorType),
-
     /// Expected a specific terminal token but got something else.
     ///
     /// # Example
@@ -108,26 +105,35 @@ pub enum ParseErrorType {
     /// ```
     ExpectedStatement,
 
-    /// Expected a token that starts a global declaration but got something else.
+    /// Expected a newline or semicolon to end a statement but got something else.
+    ///
+    /// # Example
+    /// ```text
+    /// { 1 } + 2
+    ///       ^ error
+    /// ```
+    ExpectedEndOfStatement,
+
+    /// Expected a token that starts a global definition but got something else.
     ///
     /// # Example
     /// ```text
     /// global if ()
     ///        ^ error
     /// ```
-    ExpectedGlobalDeclaration,
+    ExpectedGlobalDefinition,
 
     /// Found a linebreak in a place where one is not allowed.
     IllegalLineBreak,
-}
 
-/// An internal unexpected error occurred. If you get one of these, it's a bug.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum InternalErrorType {
-    TokenIsNotSpan,
-    SpanEndPastEof,
-    PrecedenceMismatch,
-    Empty,
+    /// An expression was not allowed due to precedence rules.
+    Precedence,
+
+    /// Expected a slot in a class or table.
+    ExpectedSlot,
+
+    /// Expected a string literal.
+    ExpectedStringLiteral,
 }
 
 /// An error emitted while trying to parse a token list.
@@ -160,20 +166,20 @@ pub struct ParseError {
 /// 1 + function
 ///     ^ error
 /// ```
-/// So it will attach a context to the error with a [`ExpressionRightHandSide`] context.
+/// So it will attach a context to the error with an [`Expression`] context.
 ///
-/// [`ExpressionRightHandSide`]: ContextType::ExpressionRightHandSide
+/// [`Expression`]: ContextType::Expression
 #[derive(Debug, Clone)]
 pub struct ParseErrorContext {
     /// The range of tokens that this context applies.
     ///
-    /// For example, if the context is a [`FunctionDeclarationStatement`], the range will include
+    /// For example, if the context is a [`FunctionDefinitionStatement`], the range will include
     /// the entire function.
     ///
     /// In some cases this will end at the token where the error is encountered, however in many
     /// cases the parser can match delimiters like `{` and `}` to provide more context.
     ///
-    /// [`FunctionDeclarationStatement`]: crate::ast::FunctionDeclarationStatement
+    /// [`FunctionDefinitionStatement`]: crate::ast::FunctionDefinitionStatement
     pub token_range: Range<usize>,
 
     /// The type of context.
@@ -192,24 +198,44 @@ impl ParseError {
     }
 
     /// Attaches some context to the error.
-    ///
-    /// If the error already has context attached, it will only be replaced if the new context
-    /// is deemed more useful, based on [`ContextType::is_useful`].
-    pub fn with_context(mut self, token_range: Range<usize>, ty: ContextType) -> Self {
-        let replace = match &self.context {
-            Some(context) => !context.ty.is_useful(),
-            None => true,
-        };
-        if replace {
-            match &mut self.context {
-                Some(context) => {
-                    context.token_range.start = context.token_range.start.min(token_range.start);
-                    context.token_range.end = context.token_range.end.max(token_range.end);
-                    context.ty = ty;
-                }
-                None => self.context = Some(ParseErrorContext { token_range, ty }),
+    pub fn with_context(self, ty: ContextType, token_range: Range<usize>) -> Self {
+        self.replace_context(ContextType::Span, ty, token_range)
+    }
+
+    pub fn replace_context(
+        mut self,
+        from_ty: ContextType,
+        to_ty: ContextType,
+        token_range: Range<usize>,
+    ) -> Self {
+        // Sanity check, ensure the range includes the actual token.
+        let token_range = (self.token_index.min(token_range.start))
+            ..((self.token_index + 1).max(token_range.end));
+
+        match &mut self.context {
+            // Set a new context if there isn't one already.
+            None => {
+                self.context = Some(ParseErrorContext {
+                    token_range,
+                    ty: to_ty,
+                });
             }
+
+            // Replace the existing context if it matches the replace type.
+            Some(context) if context.ty == from_ty => {
+                // Ensure the range contains both, allowing an inner context to expand the outer context.
+                let token_range = (token_range.start.min(context.token_range.start))
+                    ..(token_range.end.max(context.token_range.end));
+                *context = ParseErrorContext {
+                    token_range,
+                    ty: to_ty,
+                };
+            }
+
+            // Otherwise, leave the existing context intact.
+            _ => {}
         }
+
         self
     }
 
@@ -241,32 +267,41 @@ impl ParseError {
 impl std::fmt::Display for ParseErrorType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ParseErrorType::Internal(val) => write!(
+            ParseErrorType::ExpectedTerminal(terminal) => {
+                write!(f, "expected `{}`", terminal.as_str())
+            }
+            ParseErrorType::ExpectedCompound2(token1, token2) => {
+                write!(f, "expected `{}{}`", token1.as_str(), token2.as_str())
+            }
+            ParseErrorType::ExpectedCompound3(token1, token2, token3) => write!(
                 f,
-                "internal error {val:?} - this should not be shown. Please report a bug at https://github.com/cpdt/sqparse/issues with sample code.",
+                "expected `{}{}{}`",
+                token1.as_str(),
+                token2.as_str(),
+                token3.as_str()
             ),
-            ParseErrorType::ExpectedTerminal(terminal) => write!(f, "expected `{}`", terminal.as_str()),
-            ParseErrorType::ExpectedCompound2(token1, token2) => write!(f, "expected `{}{}`", token1.as_str(), token2.as_str()),
-            ParseErrorType::ExpectedCompound3(token1, token2, token3) => write!(f, "expected `{}{}{}`", token1.as_str(), token2.as_str(), token3.as_str()),
             ParseErrorType::ExpectedIdentifier => write!(f, "expected an identifier"),
             ParseErrorType::ExpectedLiteral => write!(f, "expected a literal"),
-
             ParseErrorType::ExpectedExpression => write!(f, "expected an expression"),
             ParseErrorType::ExpectedOperator => write!(f, "expected an operator"),
             ParseErrorType::ExpectedPrefixOperator => write!(f, "expected a prefix operator"),
             ParseErrorType::ExpectedPostfixOperator => write!(f, "expected a postfix operator"),
             ParseErrorType::ExpectedBinaryOperator => write!(f, "expected a binary operator"),
-
             ParseErrorType::ExpectedType => write!(f, "expected a type"),
             ParseErrorType::ExpectedTypeModifier => write!(f, "expected a type modifier"),
-
             ParseErrorType::ExpectedTableSlot => write!(f, "expected a table slot"),
             ParseErrorType::ExpectedClassMember => write!(f, "expected a class member"),
-
             ParseErrorType::ExpectedStatement => write!(f, "expected a statement"),
-            ParseErrorType::ExpectedGlobalDeclaration => write!(f, "expected `function`, `const`, `enum`, `class`, `struct`, `typedef`, or a type"),
-
-            ParseErrorType::IllegalLineBreak => write!(f, "expected anything but `\n`; got it anyway")
+            ParseErrorType::ExpectedEndOfStatement => {
+                write!(f, "expected a newline or `;` to end the statement")
+            }
+            ParseErrorType::ExpectedGlobalDefinition => write!(f, "expected a global definition"),
+            ParseErrorType::IllegalLineBreak => {
+                write!(f, "expected anything but `\\n`; got it anyway")
+            }
+            ParseErrorType::Precedence => write!(f, "not allowed due to precedence rules"),
+            ParseErrorType::ExpectedSlot => write!(f, "expected a slot"),
+            ParseErrorType::ExpectedStringLiteral => write!(f, "expected a string literal"),
         }
     }
 }

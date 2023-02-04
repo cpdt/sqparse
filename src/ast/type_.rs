@@ -1,6 +1,6 @@
 use crate::ast::{
-    Expression, FunctionRefArg, Identifier, SeparatedListTrailing0, SeparatedListTrailing1,
-    StructDeclaration,
+    Expression, FunctionRefParam, Identifier, SeparatedListTrailing0, SeparatedListTrailing1,
+    StructDefinition,
 };
 use crate::token::Token;
 
@@ -56,11 +56,11 @@ pub struct PlainType<'s> {
 
 /// An anonymous struct type.
 ///
-/// Grammar: `struct` [StructDeclaration]
+/// Grammar: `struct` [StructDefinition]
 #[derive(Debug, Clone)]
 pub struct StructType<'s> {
     pub struct_: &'s Token<'s>,
-    pub declaration: StructDeclaration<'s>,
+    pub definition: StructDefinition<'s>,
 }
 
 /// An array type.
@@ -87,13 +87,13 @@ pub struct GenericType<'s> {
 
 /// A function reference type.
 ///
-/// Grammar: [Type]? `functionref` `(` [SeparatedListTrailing0]<[FunctionRefArg] `,`> `)`
+/// Grammar: [Type]? `functionref` `(` [SeparatedListTrailing0]<[FunctionRefParam] `,`> `)`
 #[derive(Debug, Clone)]
 pub struct FunctionRefType<'s> {
     pub return_type: Option<Box<Type<'s>>>,
     pub functionref: &'s Token<'s>,
     pub open: &'s Token<'s>,
-    pub args: SeparatedListTrailing0<'s, FunctionRefArg<'s>>,
+    pub params: SeparatedListTrailing0<'s, FunctionRefParam<'s>>,
     pub close: &'s Token<'s>,
 }
 
