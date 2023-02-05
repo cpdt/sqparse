@@ -1,6 +1,6 @@
 use crate::ast::{
     ArrayType, FunctionRefType, GenericType, LocalType, NullableType, PlainType, Precedence,
-    ReferenceType, StructType, Type, VarType,
+    ReferenceType, StructType, Type,
 };
 use crate::parser::expression::expression;
 use crate::parser::function::function_ref_param;
@@ -34,7 +34,6 @@ pub fn type_(tokens: TokenList) -> ParseResult<Type> {
 fn base(tokens: TokenList) -> ParseResult<Type> {
     local(tokens)
         .map_val(Type::Local)
-        .or_try(|| var(tokens).map_val(Type::Var))
         .or_try(|| plain(tokens).map_val(Type::Plain))
         .or_try(|| void_function_ref(tokens).map_val(Type::FunctionRef))
         .or_try(|| struct_(tokens).map_val(Type::Struct))
@@ -45,12 +44,6 @@ pub fn local(tokens: TokenList) -> ParseResult<LocalType> {
     tokens
         .terminal(TerminalToken::Local)
         .map_val(|local| LocalType { local })
-}
-
-pub fn var(tokens: TokenList) -> ParseResult<VarType> {
-    tokens
-        .terminal(TerminalToken::Var)
-        .map_val(|var| VarType { var })
 }
 
 pub fn plain(tokens: TokenList) -> ParseResult<PlainType> {

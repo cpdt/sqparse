@@ -6,7 +6,7 @@ use crate::ast::{
     Precedence, ReturnStatement, SeparatedList1, Statement, StatementType,
     StructDefinitionStatement, SwitchStatement, ThreadStatement, ThrowStatement, TryCatchStatement,
     Type, TypeDefinitionStatement, UntypedStatement, VarDefinition, VarDefinitionStatement,
-    WaitStatement, WaitThreadStatement, WhileStatement, YieldStatement,
+    WaitStatement, WaitThreadSoloStatement, WaitThreadStatement, WhileStatement, YieldStatement,
 };
 use crate::parser::class::class_definition;
 use crate::parser::control::{
@@ -95,6 +95,7 @@ pub fn statement_type(tokens: TokenList) -> ParseResult<StatementType> {
         .or_try(|| thread_statement(tokens).map_val(StatementType::Thread))
         .or_try(|| delay_thread_statement(tokens).map_val(StatementType::DelayThread))
         .or_try(|| wait_thread_statement(tokens).map_val(StatementType::WaitThread))
+        .or_try(|| wait_thread_solo_statement(tokens).map_val(StatementType::WaitThreadSolo))
         .or_try(|| wait_statement(tokens).map_val(StatementType::Wait))
         .or_try(|| global_statement(tokens).map_val(StatementType::Global))
         .or_try(|| {
@@ -102,11 +103,14 @@ pub fn statement_type(tokens: TokenList) -> ParseResult<StatementType> {
         })
         .or_try(|| untyped_statement(tokens).map_val(StatementType::Untyped))
         .or_try(|| expression_statement(tokens).map_val(StatementType::Expression))
+        .with_context_from(ContextType::Statement, tokens)
         .or_error(|| tokens.error(ParseErrorType::ExpectedStatement))
 }
 
 pub fn expression_statement(tokens: TokenList) -> ParseResult<ExpressionStatement> {
-    expression(tokens, Precedence::None).map_val(|value| ExpressionStatement { value })
+    expression(tokens, Precedence::None)
+        .map_val(|value| ExpressionStatement { value })
+        .with_context_from(ContextType::Expression, tokens)
 }
 
 pub fn block_statement(tokens: TokenList) -> ParseResult<BlockStatement> {
@@ -749,6 +753,18 @@ pub fn wait_thread_statement(tokens: TokenList) -> ParseResult<WaitThreadStateme
                 .map_val(|value| WaitThreadStatement { wait_thread, value })
         })
         .with_context_from(ContextType::WaitThreadStatement, tokens)
+}
+
+pub fn wait_thread_solo_statement(tokens: TokenList) -> ParseResult<WaitThreadSoloStatement> {
+    tokens
+        .terminal(TerminalToken::WaitThreadSolo)
+        .determines(|tokens, wait_thread_solo| {
+            expression(tokens, Precedence::None).map_val(|value| WaitThreadSoloStatement {
+                wait_thread_solo,
+                value,
+            })
+        })
+        .with_context_from(ContextType::WaitThreadSoloStatement, tokens)
 }
 
 pub fn wait_statement(tokens: TokenList) -> ParseResult<WaitStatement> {

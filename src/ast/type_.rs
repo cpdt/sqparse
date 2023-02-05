@@ -20,7 +20,6 @@ use crate::token::Token;
 #[derive(Debug, Clone)]
 pub enum Type<'s> {
     Local(LocalType<'s>),
-    Var(VarType<'s>),
     Plain(PlainType<'s>),
     Array(ArrayType<'s>),
     Generic(GenericType<'s>),
@@ -36,14 +35,6 @@ pub enum Type<'s> {
 #[derive(Debug, Clone)]
 pub struct LocalType<'s> {
     pub local: &'s Token<'s>,
-}
-
-/// A `var` type.
-///
-/// Grammar: `var`
-#[derive(Debug, Clone)]
-pub struct VarType<'s> {
-    pub var: &'s Token<'s>,
 }
 
 /// A named type.

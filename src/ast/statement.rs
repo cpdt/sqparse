@@ -46,6 +46,7 @@ pub enum StatementType<'s> {
     Thread(ThreadStatement<'s>),
     DelayThread(DelayThreadStatement<'s>),
     WaitThread(WaitThreadStatement<'s>),
+    WaitThreadSolo(WaitThreadSoloStatement<'s>),
     Wait(WaitStatement<'s>),
     StructDefinition(StructDefinitionStatement<'s>),
     TypeDefinition(TypeDefinitionStatement<'s>),
@@ -313,6 +314,15 @@ pub struct DelayThreadStatement<'s> {
 #[derive(Debug, Clone)]
 pub struct WaitThreadStatement<'s> {
     pub wait_thread: &'s Token<'s>,
+    pub value: Box<Expression<'s>>,
+}
+
+/// A `waitthreadsolo` statement.
+///
+/// Grammar: `waitthreadsolo` [Expression]
+#[derive(Debug, Clone)]
+pub struct WaitThreadSoloStatement<'s> {
+    pub wait_thread_solo: &'s Token<'s>,
     pub value: Box<Expression<'s>>,
 }
 

@@ -45,6 +45,11 @@ impl<'s> Iterator for TokenIter<'s> {
             // Note that trim_start does not trim newlines.
             self.val = self.val.trim_start();
 
+            // Input could now have ended if it only contained whitespace.
+            if self.val.is_ended() {
+                break;
+            }
+
             if let Some(remaining) = self.val.strip_prefix("\n") {
                 self.val = remaining;
 

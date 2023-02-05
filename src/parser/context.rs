@@ -78,6 +78,15 @@ pub enum ContextType {
     /// ```
     CallArgumentList,
 
+    /// A statement in a program or block.
+    ///
+    /// # Example
+    /// ```text
+    /// local name = "squirrel"
+    /// ^^^^^^^^^^^^^^^^^^^^^^^ statement
+    /// ```
+    Statement,
+
     /// A block statement, containing multiple sub-statements.
     ///
     /// # Example
@@ -321,6 +330,15 @@ pub enum ContextType {
     /// ```
     WaitThreadStatement,
 
+    /// A `waitthreadsolo` statement.
+    ///
+    /// # Example
+    /// ```text
+    /// waitthreadsolo WaitForPlayerExitButtonPressed( player )
+    /// ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ wait thread solo statement
+    /// ```
+    WaitThreadSoloStatement,
+
     /// A `wait` statement.
     ///
     /// # Example
@@ -421,6 +439,7 @@ pub enum ContextType {
     /// # Example
     /// ```text
     /// typedef PlayerMap table<string, player>
+    /// ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ type definition
     /// ```
     TypeDefinition,
 
@@ -529,6 +548,7 @@ impl std::fmt::Display for ContextType {
             ContextType::FunctionLiteral => write!(f, "function literal"),
             ContextType::ClassLiteral => write!(f, "class literal"),
             ContextType::CallArgumentList => write!(f, "argument list"),
+            ContextType::Statement => write!(f, "statement"),
             ContextType::BlockStatement => write!(f, "block statement"),
             ContextType::IfStatement => write!(f, "`if` statement"),
             ContextType::IfStatementCondition => write!(f, "`if` statement condition"),
@@ -550,6 +570,7 @@ impl std::fmt::Display for ContextType {
             ContextType::ThreadStatement => write!(f, "`thread` statement"),
             ContextType::DelayThreadStatement => write!(f, "`delaythread` statement"),
             ContextType::WaitThreadStatement => write!(f, "`waitthread` statement"),
+            ContextType::WaitThreadSoloStatement => write!(f, "`waitthreadsolo` statement"),
             ContextType::WaitStatement => write!(f, "`wait` statement"),
             ContextType::GlobalStatement => write!(f, "`global` statement"),
             ContextType::ClassDefinition => write!(f, "`class` definition"),

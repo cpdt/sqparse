@@ -120,8 +120,8 @@ define_terminals! {
         Thread => "thread"                                  if Flavor::SquirrelRespawn,
         Typedef => "typedef"                                if Flavor::SquirrelRespawn,
         Untyped => "untyped"                                if Flavor::SquirrelRespawn,
-        Var => "var"                                        if Flavor::SquirrelRespawn,
         WaitThread => "waitthread"                          if Flavor::SquirrelRespawn,
+        WaitThreadSolo => "waitthreadsolo"                  if Flavor::SquirrelRespawn,
         Wait => "wait"                                      if Flavor::SquirrelRespawn
     }
 
