@@ -1,6 +1,7 @@
 use crate::parser::context::ContextType;
 use crate::token::TerminalToken;
 use crate::{display_error, TokenItem};
+use owo_colors::OwoColorize;
 use std::ops::Range;
 
 /// Type of [`ParseError`].
@@ -385,8 +386,8 @@ impl std::fmt::Display for Display<'_> {
         write!(
             f,
             "{} {}",
-            display_error(src_range, self.source),
-            self.error.ty
+            display_error(self.source, src_range.clone(), src_range.clone()),
+            self.error.ty.bright_yellow()
         )?;
 
         if let Some(context) = &self.error.context {
@@ -403,15 +404,20 @@ impl std::fmt::Display for Display<'_> {
             writeln!(f)?;
             writeln!(f)?;
 
-            let err_display = display_error(start_range.start..end_range.end, self.source);
-
-            if self.error.token_index + 1 == context.token_range.end
+            let context_text = if self.error.token_index + 1 == context.token_range.end
                 && context.end_affinity == TokenAffinity::Before
             {
-                write!(f, "{err_display} for this {}", context.ty)?;
+                "for this "
             } else {
-                write!(f, "{err_display} in this {}", context.ty,)?;
-            }
+                "in this "
+            };
+            write!(
+                f,
+                "{} {}{}",
+                display_error(self.source, start_range.start..end_range.end, src_range),
+                context_text.bright_yellow(),
+                context.ty.bright_yellow(),
+            )?;
         }
 
         Ok(())

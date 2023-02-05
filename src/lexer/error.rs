@@ -1,5 +1,6 @@
 use crate::display_error;
 use crate::token::TokenType;
+use owo_colors::OwoColorize;
 use std::ops::Range;
 
 /// Type of [`LexerError`].
@@ -115,8 +116,12 @@ impl std::fmt::Display for Display<'_> {
         write!(
             f,
             "{} {}",
-            display_error(self.error.range.clone(), self.source),
-            self.error.ty
+            display_error(
+                self.source,
+                self.error.range.clone(),
+                self.error.range.clone()
+            ),
+            self.error.ty.bright_yellow()
         )
     }
 }
