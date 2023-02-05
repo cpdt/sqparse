@@ -40,14 +40,108 @@ use yansi::Paint;
 
 pub use self::mode::Mode;
 
+/// A source code annotation.
+///
+/// An annotation describes which part of source code to highlight, and how to display it.
 #[derive(Debug, Clone)]
 pub struct Annotation {
+    /// Controls the theme of the annotation, changing colors and some characters.
     pub mode: Mode,
+
+    /// Text to print beside the highlighted region.
+    ///
+    /// # Example
+    /// ```text
+    /// 1 | this is the source text
+    ///   |      ^^^^^^ this is the annotation text
+    /// ```
     pub text: String,
+
+    /// Text to print as a note underneath the annotation.
+    ///
+    /// # Example
+    /// ```text
+    /// 1 | this is the source text
+    ///   |
+    ///   = note: this is the note text
+    /// ```
     pub note: String,
+
+    /// Character range of the source text to highlight.
+    ///
+    /// If all characters on this range are on the same line, a single line will be printed like
+    /// this:
+    /// ```text
+    /// 1 | this is some source text
+    ///          ^^^^^^^^^^^^^^
+    /// ```
+    ///
+    /// If the range spans multiple lines, the first and last two lines will be printed like this:
+    /// ```text
+    ///  1 |   println(
+    ///    |  ________^
+    ///  2 | |    "hello",
+    /// ..   |
+    /// 10 | |   1 + 2,
+    /// 11 | | )
+    ///    | |_^
+    /// ```
     pub highlight: Range<usize>,
+
+    /// Character range that must be visible in a multi-line output.
+    ///
+    /// When `highlight` spans multiple lines, lines between the first and last two may be folded.
+    /// However any lines covered by the `visible` range will be included.
+    ///
+    /// For example, this can cause one or more lines to be unfolded:
+    /// ```text
+    ///  1 |   println(
+    ///    |  ________^
+    ///  2 | |     "hello",
+    /// ..   |
+    ///  5 | |     myFunc(),
+    /// ..   |
+    /// 10 | |     1 + 2,
+    /// 11 | | )
+    ///    | |_^
+    /// ```
     pub visible: Range<usize>,
 }
+
+/// Displays a list of annotations from a source string.
+///
+/// The annotations will be prepended with the file name, if one is provided, and the start line
+/// and character offset of the first annotation. For example:
+/// ```text
+///   --> my_file.txt:5:1
+///  5 | error
+///    | ^^^^^
+/// ```
+///
+/// For details on how each annotation is formatted, see [`Annotation`].
+///
+/// # Example
+/// ```
+/// use sqparse::annotation::{Annotation, display_annotations, Mode};
+///
+/// yansi::Paint::disable();
+///
+/// let source = "highlight me!";
+/// let annotations = [
+///     Annotation {
+///         mode: Mode::Info,
+///         text: "this is me!".to_string(),
+///         note: "".to_string(),
+///         highlight: 10..12,
+///         visible: 10..12,
+///     }
+/// ];
+/// let annotations = format!("{}", display_annotations(Some("file.txt"), source, &annotations));
+/// assert_eq!(annotations, " --> file.txt:1:11
+///   |
+/// 1 | highlight me!
+///   |           -- this is me!");
+/// ```
 
 pub fn display_annotations<'s>(
     file_name: Option<&'s str>,
