@@ -114,7 +114,7 @@ impl std::fmt::Display for LexerErrorInlineDisplay<'_> {
                 write!(f, "help: add a `\"`")
             }
             LexerErrorType::UnmatchedOpener { close, .. } => {
-                write!(f, "help: add a closing {close}")
+                write!(f, "does not have a matching {close}")
             }
             LexerErrorType::InvalidInput => write!(f, "not sure what this is"),
         }

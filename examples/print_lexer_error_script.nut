@@ -1,2 +1,2 @@
-"this string spans multiple
-lines"
+++a++
+b(
