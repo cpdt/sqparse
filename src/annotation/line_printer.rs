@@ -1,21 +1,29 @@
-use crate::error_display::gutter::Gutter;
-use crate::error_display::repeat::repeat;
-use owo_colors::OwoColorize;
+use crate::annotation::gutter::Gutter;
+use crate::annotation::mode::Mode;
+use crate::annotation::repeat::repeat;
 use std::fmt::{Display, Formatter};
 use std::ops::Range;
 
 pub struct LinePrinter {
+    mode: Mode,
     gutter: Gutter,
     next_line_number: usize,
     bars: Bars,
 }
 
 impl LinePrinter {
-    pub fn new(gutter: Gutter, first_line_number: usize, max_depth: usize) -> LinePrinter {
+    pub fn new(
+        mode: Mode,
+        gutter: Gutter,
+        first_line_number: usize,
+        max_depth: usize,
+    ) -> LinePrinter {
         LinePrinter {
+            mode,
             gutter,
             next_line_number: first_line_number,
             bars: Bars {
+                mode,
                 max_depth,
                 current_depth: 0,
             },
@@ -43,6 +51,7 @@ impl LinePrinter {
 
     pub fn annotate(&self, highlight: Range<usize>) -> impl Display {
         AnnotateDisplay {
+            mode: self.mode,
             gutter: self.gutter,
             bars: self.bars,
             highlight,
@@ -51,6 +60,7 @@ impl LinePrinter {
 
     pub fn open(&mut self, highlight: Range<usize>) -> impl Display {
         let display = OpenCloseDisplay {
+            mode: self.mode,
             gutter: self.gutter,
             bars: self.bars,
             highlight,
@@ -62,6 +72,7 @@ impl LinePrinter {
 
     pub fn close(&mut self, highlight: Range<usize>) -> impl Display {
         let display = OpenCloseDisplay {
+            mode: self.mode,
             gutter: self.gutter,
             bars: self.bars,
             highlight,
@@ -109,6 +120,7 @@ impl Display for SkipDisplay {
 }
 
 struct AnnotateDisplay {
+    mode: Mode,
     gutter: Gutter,
     bars: Bars,
     highlight: Range<usize>,
@@ -122,12 +134,15 @@ impl Display for AnnotateDisplay {
             gutter = self.gutter.empty(),
             bars = self.bars,
             offset = repeat(self.highlight.start, ' '),
-            underline = repeat(self.highlight.len().max(1), '^').bright_yellow(),
+            underline = self
+                .mode
+                .display(repeat(self.highlight.len().max(1), self.mode.underline())),
         )
     }
 }
 
 struct OpenCloseDisplay {
+    mode: Mode,
     gutter: Gutter,
     bars: Bars,
     highlight: Range<usize>,
@@ -140,14 +155,15 @@ impl Display for OpenCloseDisplay {
             "{gutter}{bars}{offset}{underline}",
             gutter = self.gutter.empty(),
             bars = self.bars,
-            offset = repeat(self.highlight.start + 1, '_').bright_yellow(),
-            underline = repeat(self.highlight.len().max(1), '^').bright_yellow(),
+            offset = self.mode.display(repeat(self.highlight.start + 1, '_')),
+            underline = self.mode.display(repeat(self.highlight.len().max(1), '^')),
         )
     }
 }
 
 #[derive(Clone, Copy)]
 struct Bars {
+    mode: Mode,
     max_depth: usize,
     current_depth: usize,
 }
@@ -157,7 +173,7 @@ impl Display for Bars {
         write!(
             f,
             "{bars}{padding}",
-            bars = repeat(self.current_depth, " |").bright_yellow(),
+            bars = self.mode.display(repeat(self.current_depth, " |")),
             padding = repeat(self.max_depth - self.current_depth, "  "),
         )
     }

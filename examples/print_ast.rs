@@ -6,7 +6,7 @@ fn main() {
     let tokens = match tokenize(source, Flavor::SquirrelRespawn) {
         Ok(tokens) => tokens,
         Err(err) => {
-            eprintln!("{}", err.display(source));
+            eprintln!("{}", err.display(source, Some("print_ast_script.nut")));
             return;
         }
     };
@@ -14,7 +14,10 @@ fn main() {
     let ast = match parse(&tokens) {
         Ok(ast) => ast,
         Err(err) => {
-            eprintln!("{}", err.display(source, &tokens));
+            eprintln!(
+                "{}",
+                err.display(source, &tokens, Some("print_ast_script.nut"))
+            );
             return;
         }
     };

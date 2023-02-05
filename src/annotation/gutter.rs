@@ -1,4 +1,4 @@
-use crate::error_display::repeat::repeat;
+use crate::annotation::repeat::repeat;
 use owo_colors::OwoColorize;
 use std::fmt::{Display, Formatter};
 
@@ -14,8 +14,16 @@ impl Gutter {
         }
     }
 
+    pub fn file(self) -> impl Display {
+        GutterDisplay(FileGutterDisplay(self))
+    }
+
     pub fn empty(self) -> impl Display {
         GutterDisplay(EmptyGutterDisplay(self))
+    }
+
+    pub fn separator(self) -> impl Display {
+        GutterDisplay(SeparatorGutterDisplay(self))
     }
 
     pub fn ellipsis(self) -> impl Display {
@@ -35,11 +43,27 @@ impl<T: Display> Display for GutterDisplay<T> {
     }
 }
 
+struct FileGutterDisplay(Gutter);
+
+impl Display for FileGutterDisplay {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{pad}-->", pad = repeat(self.0.number_width, ' '))
+    }
+}
+
 struct EmptyGutterDisplay(Gutter);
 
 impl Display for EmptyGutterDisplay {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{pad} |", pad = repeat(self.0.number_width, ' '))
+    }
+}
+
+struct SeparatorGutterDisplay(Gutter);
+
+impl Display for SeparatorGutterDisplay {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{pad} =", pad = repeat(self.0.number_width, ' '))
     }
 }
 

@@ -1,5 +1,6 @@
-use crate::display_error;
+use crate::annotation::Mode;
 use crate::token::TokenType;
+use crate::{display_annotations, Annotation};
 use owo_colors::OwoColorize;
 use std::ops::Range;
 
@@ -25,15 +26,6 @@ pub enum LexerErrorType<'s> {
     /// lines"                    ^ error
     /// ```
     EndOfLineInsideString,
-
-    /// The input string ended in the middle of a multi-line comment.
-    ///
-    /// # Example
-    /// ```text
-    /// /* this comment never ends
-    ///                            ^ error
-    /// ```
-    EndOfInputInsideComment,
 
     /// Something in the input was not recognized as a valid token.
     ///
@@ -78,11 +70,22 @@ impl<'s> LexerError<'s> {
 
     /// Returns an implementation of [`std::fmt::Display`] that pretty-prints the error with source
     /// context using [`display_error`].
-    pub fn display<'a>(&'a self, source: &'a str) -> impl std::fmt::Display + 'a {
+    pub fn display<'a>(
+        &'a self,
+        source: &'a str,
+        file_name: Option<&'s str>,
+    ) -> impl std::fmt::Display + 'a {
         Display {
             error: self,
             source,
+            file_name,
         }
+    }
+}
+
+impl<'a> LexerErrorType<'a> {
+    pub fn inline_display(self) -> impl std::fmt::Display + 'a {
+        LexerErrorInlineDisplay(self)
     }
 }
 
@@ -95,13 +98,26 @@ impl std::fmt::Display for LexerErrorType<'_> {
             LexerErrorType::EndOfLineInsideString => {
                 write!(f, "strings cannot span multiple lines")
             }
-            LexerErrorType::EndOfInputInsideComment => {
-                write!(f, "input ended in the middle of a comment")
+            LexerErrorType::InvalidInput => write!(f, "unrecognized token"),
+            LexerErrorType::UnmatchedOpener { open, .. } => {
+                write!(f, "unclosed delimiter {open}")
+            }
+        }
+    }
+}
+
+struct LexerErrorInlineDisplay<'a>(LexerErrorType<'a>);
+
+impl std::fmt::Display for LexerErrorInlineDisplay<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.0 {
+            LexerErrorType::EndOfInputInsideString | LexerErrorType::EndOfLineInsideString => {
+                write!(f, "help: add a `\"`")
+            }
+            LexerErrorType::UnmatchedOpener { close, .. } => {
+                write!(f, "help: add a closing {close}")
             }
             LexerErrorType::InvalidInput => write!(f, "not sure what this is"),
-            LexerErrorType::UnmatchedOpener { close, .. } => {
-                write!(f, "missing a closing {close}")
-            }
         }
     }
 }
@@ -109,19 +125,32 @@ impl std::fmt::Display for LexerErrorType<'_> {
 struct Display<'s> {
     error: &'s LexerError<'s>,
     source: &'s str,
+    file_name: Option<&'s str>,
 }
 
 impl std::fmt::Display for Display<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(
+            f,
+            "{}{}{}",
+            "error".bright_red(),
+            ": ".bright_white(),
+            self.error.ty.bright_white(),
+        )?;
+
+        let annotations = [Annotation {
+            mode: Mode::Error,
+            text: format!("{}", self.error.ty.inline_display()),
+            note: "".to_string(),
+            highlight: self.error.range.clone(),
+            visible: self.error.range.clone(),
+        }];
+
         write!(
             f,
-            "{} {}",
-            display_error(
-                self.source,
-                self.error.range.clone(),
-                self.error.range.clone()
-            ),
-            self.error.ty.bright_yellow()
-        )
+            "{}",
+            display_annotations(self.file_name, self.source, &annotations)
+        )?;
+        Ok(())
     }
 }

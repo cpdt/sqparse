@@ -1,6 +1,7 @@
+use crate::annotation::Mode;
 use crate::parser::context::ContextType;
 use crate::token::TerminalToken;
-use crate::{display_error, TokenItem};
+use crate::{display_annotations, Annotation, TokenItem};
 use owo_colors::OwoColorize;
 use std::ops::Range;
 
@@ -308,11 +309,13 @@ impl ParseError {
         &'s self,
         source: &'s str,
         tokens: &'s [TokenItem<'s>],
+        file_name: Option<&'s str>,
     ) -> impl std::fmt::Display + 's {
         Display {
             error: self,
             source,
             tokens,
+            file_name,
         }
     }
 
@@ -360,12 +363,14 @@ impl std::fmt::Display for ParseErrorType {
                 write!(f, "expected a newline or `;`")
             }
             ParseErrorType::ExpectedGlobalDefinition => write!(f, "expected a global definition"),
+            ParseErrorType::ExpectedSlot => write!(f, "expected a slot"),
+            ParseErrorType::ExpectedStringLiteral => write!(f, "expected a string literal"),
+
+            // todo: these need rewording to fit with "<>, found a <>"
             ParseErrorType::IllegalLineBreak => {
                 write!(f, "expected anything but `\\n`; got it anyway")
             }
             ParseErrorType::Precedence => write!(f, "not allowed due to precedence rules"),
-            ParseErrorType::ExpectedSlot => write!(f, "expected a slot"),
-            ParseErrorType::ExpectedStringLiteral => write!(f, "expected a string literal"),
         }
     }
 }
@@ -374,21 +379,50 @@ struct Display<'s> {
     error: &'s ParseError,
     source: &'s str,
     tokens: &'s [TokenItem<'s>],
+    file_name: Option<&'s str>,
 }
 
 impl std::fmt::Display for Display<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}{}{}",
+            "error".bright_red(),
+            ": ".bright_white(),
+            self.error.ty.bright_white()
+        )?;
+        match self.tokens.get(self.error.token_index) {
+            Some(item) => writeln!(
+                f,
+                "{}{}",
+                ", found a ".bright_white(),
+                item.token.ty.bright_white()
+            )?,
+            None => writeln!(f, "{}", ", found the end of input".bright_white())?,
+        }
+
         let src_range = token_src_range(
             self.error.token_index,
             self.error.token_affinity,
             self.tokens,
         );
-        write!(
-            f,
-            "{} {}",
-            display_error(self.source, src_range.clone(), src_range.clone()),
-            self.error.ty.bright_yellow()
-        )?;
+        let note = match &self.error.context {
+            Some(context) => {
+                let is_end = self.error.token_index + 1 == context.token_range.end
+                    && context.end_affinity == TokenAffinity::Before;
+                let context_text = if is_end { "for this" } else { "in this" };
+                format!("{} {}:", context_text, context.ty)
+            }
+            None => "".to_string(),
+        };
+
+        let mut annotations = vec![Annotation {
+            mode: Mode::Error,
+            text: format!("{}", self.error.ty),
+            note,
+            highlight: src_range.clone(),
+            visible: src_range.clone(),
+        }];
 
         if let Some(context) = &self.error.context {
             let start_range = token_src_range(
@@ -401,25 +435,20 @@ impl std::fmt::Display for Display<'_> {
                 context.end_affinity,
                 self.tokens,
             );
-            writeln!(f)?;
-            writeln!(f)?;
-
-            let context_text = if self.error.token_index + 1 == context.token_range.end
-                && context.end_affinity == TokenAffinity::Before
-            {
-                "for this "
-            } else {
-                "in this "
-            };
-            write!(
-                f,
-                "{} {}{}",
-                display_error(self.source, start_range.start..end_range.end, src_range),
-                context_text.bright_yellow(),
-                context.ty.bright_yellow(),
-            )?;
+            annotations.push(Annotation {
+                mode: Mode::Info,
+                text: "".to_string(),
+                note: "".to_string(),
+                highlight: start_range.start..end_range.end,
+                visible: src_range,
+            });
         }
 
+        write!(
+            f,
+            "{}",
+            display_annotations(self.file_name, self.source, &annotations)
+        )?;
         Ok(())
     }
 }

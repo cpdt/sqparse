@@ -1,4 +1,4 @@
-use crate::lexer::error::{LexerError, LexerErrorType};
+use crate::lexer::error::LexerError;
 use crate::lexer::parse_str::ParseStr;
 use crate::token::Comment;
 
@@ -9,10 +9,7 @@ pub fn try_comment(val: ParseStr) -> Result<Option<(Comment, ParseStr)>, LexerEr
                 Comment::MultiLine(&val.as_str()[..end_index]),
                 val.from(end_index + 2),
             ))),
-            None => Err(LexerError::new(
-                LexerErrorType::EndOfInputInsideComment,
-                val.end_offset()..val.end_offset(),
-            )),
+            None => Ok(Some((Comment::MultiLine(val.as_str()), val.end()))),
         };
     }
 

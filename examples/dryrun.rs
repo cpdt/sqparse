@@ -41,7 +41,7 @@ fn main() {
         let tokens = match tokenize(&file_text, Flavor::SquirrelRespawn) {
             Ok(tokens) => tokens,
             Err(err) => {
-                eprintln!("{}", err.display(&file_text));
+                eprintln!("{}", err.display(&file_text, path.to_str()));
                 std::process::exit(1);
             }
         };
@@ -50,7 +50,7 @@ fn main() {
 
         let parse_start = Instant::now();
         if let Err(err) = parse(&tokens) {
-            eprintln!("{}", err.display(&file_text, &tokens));
+            eprintln!("{}", err.display(&file_text, &tokens, path.to_str()));
             std::process::exit(1);
         }
         let parse_secs = parse_start.elapsed().as_secs_f64();

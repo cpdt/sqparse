@@ -410,10 +410,10 @@ pub struct TokenLine<'s> {
 impl std::fmt::Display for LiteralToken<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            LiteralToken::Int(_, _) => write!(f, "integer literal"),
-            LiteralToken::Char(_) => write!(f, "character literal"),
-            LiteralToken::Float(_) => write!(f, "float literal"),
-            LiteralToken::String(_) => write!(f, "string literal"),
+            LiteralToken::Int(_, _) => write!(f, "an integer literal"),
+            LiteralToken::Char(_) => write!(f, "a character literal"),
+            LiteralToken::Float(_) => write!(f, "a float literal"),
+            LiteralToken::String(_) => write!(f, "a string literal"),
         }
     }
 }
@@ -424,7 +424,7 @@ impl std::fmt::Display for TokenType<'_> {
             TokenType::Empty => write!(f, "<empty>"),
             TokenType::Terminal(terminal) => write!(f, "`{}`", terminal.as_str()),
             TokenType::Literal(literal) => write!(f, "{literal}"),
-            TokenType::Identifier(_) => write!(f, "identifier"),
+            TokenType::Identifier(text) => write!(f, "`{text}`"),
         }
     }
 }
