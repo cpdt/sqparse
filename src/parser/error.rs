@@ -255,6 +255,7 @@ impl ParseError {
         self.replace_context(ContextType::Span, ty, token_range, end_affinity)
     }
 
+    /// Replaces an existing context with a new one, if it matches.
     pub fn replace_context(
         mut self,
         from_ty: ContextType,
