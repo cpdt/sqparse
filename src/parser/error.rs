@@ -44,6 +44,15 @@ pub enum ParseErrorType {
     /// ```
     ExpectedExpression,
 
+    /// Expected a token that starts a value in an expression but got something else.
+    ///
+    /// # Example
+    /// ```text
+    /// local sum = 1 + ?
+    ///                 ^ error
+    /// ```
+    ExpectedValue,
+
     /// Expected an operator but got something else.
     ExpectedOperator,
 
@@ -148,10 +157,45 @@ pub struct ParseError {
     /// The index of the token where the error occurred.
     pub token_index: usize,
 
+    /// Affinity of the token.
+    pub token_affinity: TokenAffinity,
+
     /// Contextual information if available.
     pub context: Option<ParseErrorContext>,
 
     pub(crate) is_fatal: bool,
+}
+
+/// Affinity of the token index in [`ParseError`].
+///
+/// This controls how a token range is printed when the token is at the start of a newline. For
+/// example, in this input:
+/// ```text
+/// a +
+/// b
+/// ```
+///
+/// An affinity of [`Before`] on `b` would highlight the end of the line before `b`, indicating the
+/// error is not necessarily related to `b` itself but to something missing after `+`:
+/// ```text
+/// a +
+///    ^
+/// b
+/// ```
+///
+/// An affinity of [`Inline`] would highlight `b` itself, indicating it is the problematic token:
+/// ```text
+/// a +
+/// b
+/// ^
+/// ```
+///
+/// [`Before`]: TokenAffinity::Before
+/// [`Inline`]: TokenAffinity::Inline
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TokenAffinity {
+    Before,
+    Inline,
 }
 
 /// Context attached to a [`ParseError`].
@@ -182,24 +226,33 @@ pub struct ParseErrorContext {
     /// [`FunctionDefinitionStatement`]: crate::ast::FunctionDefinitionStatement
     pub token_range: Range<usize>,
 
+    /// Affinity of the last token in the range.
+    pub end_affinity: TokenAffinity,
+
     /// The type of context.
     pub ty: ContextType,
 }
 
 impl ParseError {
     /// Creates a new `ParseError`.
-    pub fn new(ty: ParseErrorType, token_index: usize) -> Self {
+    pub fn new(ty: ParseErrorType, token_index: usize, token_affinity: TokenAffinity) -> Self {
         ParseError {
             ty,
             token_index,
+            token_affinity,
             context: None,
             is_fatal: false,
         }
     }
 
     /// Attaches some context to the error.
-    pub fn with_context(self, ty: ContextType, token_range: Range<usize>) -> Self {
-        self.replace_context(ContextType::Span, ty, token_range)
+    pub fn with_context(
+        self,
+        ty: ContextType,
+        token_range: Range<usize>,
+        end_affinity: TokenAffinity,
+    ) -> Self {
+        self.replace_context(ContextType::Span, ty, token_range, end_affinity)
     }
 
     pub fn replace_context(
@@ -207,6 +260,7 @@ impl ParseError {
         from_ty: ContextType,
         to_ty: ContextType,
         token_range: Range<usize>,
+        end_affinity: TokenAffinity,
     ) -> Self {
         // Sanity check, ensure the range includes the actual token.
         let token_range = (self.token_index.min(token_range.start))
@@ -218,6 +272,7 @@ impl ParseError {
                 self.context = Some(ParseErrorContext {
                     token_range,
                     ty: to_ty,
+                    end_affinity,
                 });
             }
 
@@ -226,9 +281,15 @@ impl ParseError {
                 // Ensure the range contains both, allowing an inner context to expand the outer context.
                 let token_range = (token_range.start.min(context.token_range.start))
                     ..(token_range.end.max(context.token_range.end));
+                let end_affinity = if context.end_affinity == TokenAffinity::Inline {
+                    TokenAffinity::Inline
+                } else {
+                    end_affinity
+                };
                 *context = ParseErrorContext {
                     token_range,
                     ty: to_ty,
+                    end_affinity,
                 };
             }
 
@@ -283,6 +344,7 @@ impl std::fmt::Display for ParseErrorType {
             ParseErrorType::ExpectedIdentifier => write!(f, "expected an identifier"),
             ParseErrorType::ExpectedLiteral => write!(f, "expected a literal"),
             ParseErrorType::ExpectedExpression => write!(f, "expected an expression"),
+            ParseErrorType::ExpectedValue => write!(f, "expected a value"),
             ParseErrorType::ExpectedOperator => write!(f, "expected an operator"),
             ParseErrorType::ExpectedPrefixOperator => write!(f, "expected a prefix operator"),
             ParseErrorType::ExpectedPostfixOperator => write!(f, "expected a postfix operator"),
@@ -293,7 +355,7 @@ impl std::fmt::Display for ParseErrorType {
             ParseErrorType::ExpectedClassMember => write!(f, "expected a class member"),
             ParseErrorType::ExpectedStatement => write!(f, "expected a statement"),
             ParseErrorType::ExpectedEndOfStatement => {
-                write!(f, "expected a newline or `;` to end the statement")
+                write!(f, "expected a newline or `;`")
             }
             ParseErrorType::ExpectedGlobalDefinition => write!(f, "expected a global definition"),
             ParseErrorType::IllegalLineBreak => {
@@ -314,7 +376,11 @@ struct Display<'s> {
 
 impl std::fmt::Display for Display<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let src_range = token_src_range(self.error.token_index, self.tokens, self.source);
+        let src_range = token_src_range(
+            self.error.token_index,
+            self.error.token_affinity,
+            self.tokens,
+        );
         write!(
             f,
             "{} {}",
@@ -323,25 +389,52 @@ impl std::fmt::Display for Display<'_> {
         )?;
 
         if let Some(context) = &self.error.context {
-            let start_range = token_src_range(context.token_range.start, self.tokens, self.source);
-            let end_range = token_src_range(context.token_range.end - 1, self.tokens, self.source);
+            let start_range = token_src_range(
+                context.token_range.start,
+                TokenAffinity::Inline,
+                self.tokens,
+            );
+            let end_range = token_src_range(
+                context.token_range.end - 1,
+                context.end_affinity,
+                self.tokens,
+            );
             writeln!(f)?;
             writeln!(f)?;
-            write!(
-                f,
-                "{} in this {}",
-                display_error(start_range.start..end_range.end, self.source),
-                context.ty,
-            )?;
+
+            let err_display = display_error(start_range.start..end_range.end, self.source);
+
+            if self.error.token_index + 1 == context.token_range.end
+                && context.end_affinity == TokenAffinity::Before
+            {
+                write!(f, "{err_display} for this {}", context.ty)?;
+            } else {
+                write!(f, "{err_display} in this {}", context.ty,)?;
+            }
         }
 
         Ok(())
     }
 }
 
-fn token_src_range(token_index: usize, tokens: &[TokenItem], src: &str) -> Range<usize> {
-    match tokens.get(token_index) {
-        Some(item) => item.token.range.clone(),
-        None => src.len()..src.len(),
+fn token_src_range(
+    token_index: usize,
+    affinity: TokenAffinity,
+    tokens: &[TokenItem],
+) -> Range<usize> {
+    let Some(last_item) = tokens.last() else { return 0..0; };
+
+    if affinity == TokenAffinity::Before {
+        if token_index > 0 {
+            let last_item = &tokens[token_index.min(tokens.len()) - 1];
+            last_item.token.range.end..last_item.token.range.end
+        } else {
+            0..0
+        }
+    } else if token_index < tokens.len() {
+        let item = &tokens[token_index];
+        item.token.range.clone()
+    } else {
+        last_item.token.range.end..last_item.token.range.end
     }
 }

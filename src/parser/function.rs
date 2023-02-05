@@ -56,9 +56,17 @@ pub fn function_environment(tokens: TokenList) -> ParseResult<FunctionEnvironmen
 }
 
 pub fn function_params(tokens: TokenList) -> ParseResult<FunctionParams> {
-    let (tokens, maybe_list) = tokens.separated_list_trailing0(function_param, |tokens| {
-        tokens.terminal(TerminalToken::Comma)
-    })?;
+    let (tokens, maybe_list) = tokens.separated_list_trailing0(
+        |tokens| {
+            let res = function_param(tokens);
+            if tokens.is_ended() || tokens.terminal(TerminalToken::Ellipsis).is_ok() {
+                res
+            } else {
+                res.definite()
+            }
+        },
+        |tokens| tokens.terminal(TerminalToken::Comma),
+    )?;
 
     let Some(list) = maybe_list else {
         // There are no arguments. The function can still be variable.

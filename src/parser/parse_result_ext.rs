@@ -1,3 +1,4 @@
+use crate::parser::error::TokenAffinity;
 use crate::parser::token_list::TokenList;
 use crate::parser::token_list_ext::TokenListExt;
 use crate::parser::ParseResult;
@@ -49,16 +50,11 @@ pub trait ParseResultExt<'s, T>: Sized {
     }
 
     fn with_context(self, ty: ContextType, range: Range<usize>) -> ParseResult<'s, T> {
-        self.into_parse_result()
-            .map_err(|err| err.with_context(ty, range))
+        self.replace_context(ContextType::Span, ty, range)
     }
 
     fn with_context_from(self, ty: ContextType, tokens: TokenList) -> ParseResult<'s, T> {
-        let start_index = tokens.start_index();
-        self.into_parse_result().map_err(|err| {
-            let range = start_index..err.token_index;
-            err.with_context(ty, range)
-        })
+        self.replace_context_from(ContextType::Span, ty, tokens)
     }
 
     fn replace_context(
@@ -68,7 +64,7 @@ pub trait ParseResultExt<'s, T>: Sized {
         range: Range<usize>,
     ) -> ParseResult<'s, T> {
         self.into_parse_result()
-            .map_err(|err| err.replace_context(from_ty, to_ty, range))
+            .map_err(|err| err.replace_context(from_ty, to_ty, range, TokenAffinity::Inline))
     }
 
     fn replace_context_from(
@@ -80,7 +76,7 @@ pub trait ParseResultExt<'s, T>: Sized {
         let start_index = tokens.start_index();
         self.into_parse_result().map_err(|err| {
             let range = start_index..err.token_index;
-            err.replace_context(from_ty, to_ty, range)
+            err.replace_context(from_ty, to_ty, range, TokenAffinity::Before)
         })
     }
 

@@ -1,4 +1,5 @@
 use crate::ast::{SeparatedList1, SeparatedListTrailing0, SeparatedListTrailing1};
+use crate::parser::error::TokenAffinity;
 use crate::parser::parse_result_ext::ParseResultExt;
 use crate::parser::token_list::TokenList;
 use crate::parser::ParseResult;
@@ -9,7 +10,21 @@ pub trait TokenListExt<'s>: Sized {
     fn into_token_list(self) -> TokenList<'s>;
 
     fn error(self, ty: ParseErrorType) -> ParseError {
-        ParseError::new(ty, self.into_token_list().start_index())
+        let tokens = self.into_token_list();
+        let affinity = if tokens.is_ended() {
+            TokenAffinity::Before
+        } else {
+            TokenAffinity::Inline
+        };
+        ParseError::new(ty, tokens.start_index(), affinity)
+    }
+
+    fn error_before(self, ty: ParseErrorType) -> ParseError {
+        ParseError::new(
+            ty,
+            self.into_token_list().start_index(),
+            TokenAffinity::Before,
+        )
     }
 
     fn ended_or<T>(self, res: ParseResult<'s, T>) -> ParseResult<'s, T> {
@@ -96,6 +111,32 @@ pub trait TokenListExt<'s>: Sized {
         Ok((tokens, values))
     }
 
+    fn many_until<
+        T,
+        FCond: FnMut(TokenList<'s>) -> bool,
+        FItem: FnMut(TokenList<'s>) -> ParseResult<'s, T>,
+    >(
+        self,
+        mut cond: FCond,
+        mut parse_item: FItem,
+    ) -> ParseResult<'s, Vec<T>> {
+        let mut tokens = self.into_token_list();
+        let mut values = Vec::new();
+        while !cond(tokens) {
+            let (new_tokens, item) = parse_item(tokens)?;
+            tokens = new_tokens;
+            values.push(item);
+        }
+        Ok((tokens, values))
+    }
+
+    fn many_until_ended<T, FItem: FnMut(TokenList<'s>) -> ParseResult<'s, T>>(
+        self,
+        parse_item: FItem,
+    ) -> ParseResult<'s, Vec<T>> {
+        self.many_until(|tokens| tokens.is_ended(), parse_item)
+    }
+
     fn separated_list1<
         T,
         FItem: FnMut(TokenList<'s>) -> ParseResult<'s, T>,
@@ -139,13 +180,16 @@ pub trait TokenListExt<'s>: Sized {
         FSeparator: FnMut(TokenList<'s>) -> ParseResult<'s, &'s Token<'s>>,
     >(
         self,
-        parse_item: FItem,
+        mut parse_item: FItem,
         parse_separator: FSeparator,
     ) -> ParseResult<'s, SeparatedListTrailing0<'s, T>> {
         let tokens = self.into_token_list();
+        let (tokens, Some(first_item)) = parse_item(tokens).maybe(tokens)? else {
+            return Ok((tokens, None));
+        };
         tokens
-            .separated_list_trailing1(parse_item, parse_separator)
-            .maybe(tokens)
+            .separated_list_trailing1_init(first_item, parse_item, parse_separator)
+            .map_val(Some)
     }
 
     fn separated_list_trailing1_init<

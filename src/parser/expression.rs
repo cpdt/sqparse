@@ -51,7 +51,7 @@ fn value(tokens: TokenList) -> ParseResult<Box<Expression>> {
         .or_try(|| prefix(tokens).map_val(Expression::Prefix))
         .or_try(|| delegate(tokens).map_val(Expression::Delegate))
         .or_try(|| expect(tokens).map_val(Expression::Expect))
-        .or_error(|| tokens.error(ParseErrorType::ExpectedExpression))
+        .or_error(|| tokens.error(ParseErrorType::ExpectedValue))
         .map_val(Box::new)
 }
 
@@ -131,7 +131,10 @@ pub fn table_delimited(
         ContextType::TableLiteral,
         |tokens| tokens.terminal(close_terminal),
         |tokens, open, close| {
-            let (tokens, slots) = tokens.many(table_slot)?;
+            let (tokens, slots) = tokens.many_until(
+                |tokens| tokens.is_ended() || tokens.terminal(TerminalToken::Ellipsis).is_ok(),
+                table_slot,
+            )?;
             let (tokens, spread) = tokens.terminal(TerminalToken::Ellipsis).maybe(tokens)?;
             Ok((
                 tokens,
@@ -162,7 +165,10 @@ pub fn array(tokens: TokenList) -> ParseResult<ArrayExpression> {
             ContextType::ArrayLiteral,
             |tokens| tokens.terminal(TerminalToken::CloseSquare),
             |tokens, open, close| {
-                let (tokens, values) = tokens.many(array_value)?;
+                let (tokens, values) = tokens.many_until(
+                    |tokens| tokens.is_ended() || tokens.terminal(TerminalToken::Ellipsis).is_ok(),
+                    array_value,
+                )?;
                 let (tokens, spread) = tokens.terminal(TerminalToken::Ellipsis).maybe(tokens)?;
                 Ok((
                     tokens,
@@ -432,7 +438,14 @@ fn call<'s>(
             |tokens, open, close| {
                 tokens
                     .separated_list_trailing0(
-                        |tokens| expression(tokens, Precedence::Comma).map_val(|expr| *expr),
+                        |tokens| {
+                            let res = expression(tokens, Precedence::Comma).map_val(|expr| *expr);
+                            if tokens.is_ended() {
+                                res
+                            } else {
+                                res.definite()
+                            }
+                        },
                         |tokens| tokens.terminal(TerminalToken::Comma),
                     )
                     .map_val(|args| (open, args, close))

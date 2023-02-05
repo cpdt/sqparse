@@ -103,8 +103,17 @@ fn generic<'s>(tokens: TokenList<'s>, left: TypeRef<'_, 's>) -> ParseResult<'s, 
     tokens
         .terminal(TerminalToken::Less)
         .determines(|tokens, open| {
-            let (tokens, params) = tokens
-                .separated_list_trailing1(type_, |tokens| tokens.terminal(TerminalToken::Comma))?;
+            let (tokens, params) = tokens.separated_list_trailing1(
+                |tokens| {
+                    let res = type_(tokens);
+                    if tokens.terminal(TerminalToken::Greater).is_ok() {
+                        res
+                    } else {
+                        res.definite()
+                    }
+                },
+                |tokens| tokens.terminal(TerminalToken::Comma),
+            )?;
             let (tokens, close) = tokens.terminal(TerminalToken::Greater)?;
             Ok((
                 tokens,

@@ -15,7 +15,7 @@ pub fn class_definition(tokens: TokenList) -> ParseResult<ClassDefinition> {
         |tokens| tokens.terminal(TerminalToken::CloseBrace),
         |tokens, open, close| {
             tokens
-                .many(class_member)
+                .many_until_ended(class_member)
                 .map_val(|members| (open, members, close))
         },
     )?;

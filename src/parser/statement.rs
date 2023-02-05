@@ -28,13 +28,14 @@ use crate::token::{TerminalToken, Token};
 use crate::{ContextType, ParseErrorType};
 
 pub fn statement(tokens: TokenList) -> ParseResult<Statement> {
-    let (tokens, statement) = inner_statement(tokens)?;
+    let (next_tokens, statement) = inner_statement(tokens)?;
 
     // Statement must end with a semicolon, newline, or end of input.
-    if statement.semicolon.is_some() || tokens.is_newline() || tokens.is_ended() {
-        Ok((tokens, statement))
+    if statement.semicolon.is_some() || next_tokens.is_newline() || next_tokens.is_ended() {
+        Ok((next_tokens, statement))
     } else {
-        Err(tokens.error(ParseErrorType::ExpectedEndOfStatement))
+        Err(next_tokens.error_before(ParseErrorType::ExpectedEndOfStatement))
+            .with_context_from(ContextType::Statement, tokens)
     }
 }
 
@@ -119,13 +120,8 @@ pub fn block_statement(tokens: TokenList) -> ParseResult<BlockStatement> {
         .determines_and_opens(
             ContextType::BlockStatement,
             |tokens| tokens.terminal(TerminalToken::CloseBrace),
-            |mut tokens, open, close| {
-                let mut statements = Vec::new();
-                while !tokens.is_ended() {
-                    let (new_tokens, statement) = statement(tokens)?;
-                    tokens = new_tokens;
-                    statements.push(statement);
-                }
+            |tokens, open, close| {
+                let (tokens, statements) = tokens.many_until_ended(statement)?;
                 Ok((
                     tokens,
                     BlockStatement {
@@ -256,7 +252,7 @@ pub fn switch_statement(tokens: TokenList) -> ParseResult<SwitchStatement> {
                     |tokens| tokens.terminal(TerminalToken::CloseBrace),
                     |tokens, open, close| {
                         tokens
-                            .many(switch_case)
+                            .many_until_ended(switch_case)
                             .map_val(|cases| (open, cases, close))
                     },
                 )?;
@@ -544,7 +540,7 @@ pub fn enum_definition_statement(tokens: TokenList) -> ParseResult<EnumDefinitio
                     |tokens| tokens.terminal(TerminalToken::CloseBrace),
                     |tokens, open, close| {
                         tokens
-                            .many(enum_entry)
+                            .many_until_ended(enum_entry)
                             .map_val(|entries| (open, entries, close))
                     },
                 )?;

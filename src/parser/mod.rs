@@ -26,6 +26,7 @@ use crate::ast::Program;
 use crate::lexer::TokenItem;
 use crate::parser::statement::statement;
 use crate::parser::token_list::TokenList;
+use crate::parser::token_list_ext::TokenListExt;
 
 type ParseResult<'s, T> = Result<(TokenList<'s>, T), ParseError>;
 
@@ -52,12 +53,8 @@ type ParseResult<'s, T> = Result<(TokenList<'s>, T), ParseError>;
 /// assert_eq!(program.statements.len(), 3);
 /// ```
 pub fn parse<'s>(items: &'s [TokenItem<'s>]) -> Result<Program<'s>, ParseError> {
-    let mut tokens = TokenList::new(items);
-    let mut statements = Vec::new();
-    while !tokens.is_ended() {
-        let (new_tokens, statement) = statement(tokens)?;
-        tokens = new_tokens;
-        statements.push(statement);
-    }
+    let tokens = TokenList::new(items);
+    let (tokens, statements) = tokens.many_until_ended(statement)?;
+    assert!(tokens.is_ended());
     Ok(Program { statements })
 }

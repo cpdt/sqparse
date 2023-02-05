@@ -15,7 +15,7 @@ pub fn struct_definition(tokens: TokenList) -> ParseResult<StructDefinition> {
         |tokens| tokens.terminal(TerminalToken::CloseBrace),
         |tokens, open, close| {
             tokens
-                .many(struct_property)
+                .many_until_ended(struct_property)
                 .map_val(|properties| StructDefinition {
                     open,
                     properties,
