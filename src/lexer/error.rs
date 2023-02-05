@@ -69,7 +69,7 @@ impl<'s> LexerError<'s> {
     }
 
     /// Returns an implementation of [`std::fmt::Display`] that pretty-prints the error with source
-    /// context using [`display_error`].
+    /// context using [`display_annotations`].
     pub fn display<'a>(
         &'a self,
         source: &'a str,

@@ -304,7 +304,7 @@ impl ParseError {
     }
 
     /// Returns an implementation of [`std::fmt::Display`] that pretty-prints the error and context
-    /// using [`display_error`].
+    /// using [`display_annotations`].
     pub fn display<'s>(
         &'s self,
         source: &'s str,
