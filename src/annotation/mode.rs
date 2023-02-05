@@ -1,5 +1,5 @@
-use owo_colors::OwoColorize;
 use std::fmt::{Display, Formatter};
+use yansi::Paint;
 
 #[derive(Debug, Clone, Copy)]
 pub enum Mode {
@@ -26,9 +26,9 @@ struct ModeDisplay<T: Display>(Mode, T);
 impl<T: Display> Display for ModeDisplay<T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self.0 {
-            Mode::Warning => write!(f, "{}", self.1.bright_yellow()),
-            Mode::Error => write!(f, "{}", self.1.bright_red()),
-            Mode::Info => write!(f, "{}", self.1.bright_cyan()),
+            Mode::Warning => write!(f, "{}", Paint::yellow(&self.1).bold()),
+            Mode::Error => write!(f, "{}", Paint::red(&self.1).bold()),
+            Mode::Info => write!(f, "{}", Paint::cyan(&self.1).bold()),
         }
     }
 }

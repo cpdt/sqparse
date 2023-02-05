@@ -1,3 +1,31 @@
+//! A utility for pretty-printing source code annotations, warnings and errors.
+//!
+//! [`display_annotations`] returns an object that implements [`Display`], that will pretty-print
+//! some source code based on a list of [`Annotation`]s.
+//!
+//! # Example
+//! ```
+//! use sqparse::annotation::{Annotation, display_annotations, Mode};
+//!
+//! yansi::Paint::disable();
+//!
+//! let source = "highlight me!";
+//! let annotations = [
+//!     Annotation {
+//!         mode: Mode::Info,
+//!         text: "this is me!".to_string(),
+//!         note: "".to_string(),
+//!         highlight: 10..12,
+//!         visible: 10..12,
+//!     }
+//! ];
+//! let annotations = format!("{}", display_annotations(Some("file.txt"), source, &annotations));
+//! assert_eq!(annotations, " --> file.txt:1:11
+//!   |
+//! 1 | highlight me!
+//!   |           -- this is me!");
+//! ```
+
 mod formats;
 mod gutter;
 mod line_printer;
@@ -6,9 +34,9 @@ mod repeat;
 
 use crate::annotation::formats::{MultiLineFormatDisplay, SingleLineFormatDisplay};
 use crate::annotation::gutter::Gutter;
-use owo_colors::OwoColorize;
 use std::fmt::{Display, Formatter};
 use std::ops::{Range, RangeInclusive};
+use yansi::Paint;
 
 pub use self::mode::Mode;
 
@@ -130,7 +158,7 @@ impl Display for AnnotationsDisplay<'_> {
                     f,
                     "{} {}",
                     self.gutter.separator(),
-                    annotation.note.bright_white()
+                    Paint::white(&annotation.note).bold()
                 )?;
             } else if annotation_index + 1 < self.annotations.len() {
                 write!(f, "\n{}", self.gutter.separator())?;

@@ -1,9 +1,9 @@
-use crate::annotation::Mode;
+use crate::annotation::{display_annotations, Annotation, Mode};
 use crate::parser::context::ContextType;
 use crate::token::TerminalToken;
-use crate::{display_annotations, Annotation, TokenItem};
-use owo_colors::OwoColorize;
+use crate::TokenItem;
 use std::ops::Range;
+use yansi::Paint;
 
 /// Type of [`ParseError`].
 ///
@@ -387,18 +387,18 @@ impl std::fmt::Display for Display<'_> {
         write!(
             f,
             "{}{}{}",
-            "error".bright_red(),
-            ": ".bright_white(),
-            self.error.ty.bright_white()
+            Paint::red("error").bold(),
+            Paint::white(": ").bold(),
+            Paint::white(self.error.ty).bold()
         )?;
         match self.tokens.get(self.error.token_index) {
             Some(item) => writeln!(
                 f,
                 "{}{}",
-                ", found a ".bright_white(),
-                item.token.ty.bright_white()
+                Paint::white(", found a ").bold(),
+                Paint::white(item.token.ty).bold()
             )?,
-            None => writeln!(f, "{}", ", found the end of input".bright_white())?,
+            None => writeln!(f, "{}", Paint::white(", found the end of input").bold())?,
         }
 
         let src_range = token_src_range(

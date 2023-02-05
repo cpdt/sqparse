@@ -1,8 +1,7 @@
-use crate::annotation::Mode;
+use crate::annotation::{display_annotations, Annotation, Mode};
 use crate::token::TokenType;
-use crate::{display_annotations, Annotation};
-use owo_colors::OwoColorize;
 use std::ops::Range;
+use yansi::Paint;
 
 /// Type of [`LexerError`].
 ///
@@ -133,9 +132,9 @@ impl std::fmt::Display for Display<'_> {
         writeln!(
             f,
             "{}{}{}",
-            "error".bright_red(),
-            ": ".bright_white(),
-            self.error.ty.bright_white(),
+            Paint::red("error").bold(),
+            Paint::white(": ").bold(),
+            Paint::white(self.error.ty).bold(),
         )?;
 
         let annotations = [Annotation {

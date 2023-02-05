@@ -1,6 +1,6 @@
 use crate::annotation::repeat::repeat;
-use owo_colors::OwoColorize;
 use std::fmt::{Display, Formatter};
+use yansi::Paint;
 
 #[derive(Clone, Copy)]
 pub struct Gutter {
@@ -39,7 +39,7 @@ struct GutterDisplay<T: Display>(T);
 
 impl<T: Display> Display for GutterDisplay<T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0.bright_cyan())
+        write!(f, "{}", Paint::cyan(&self.0).bold())
     }
 }
 
