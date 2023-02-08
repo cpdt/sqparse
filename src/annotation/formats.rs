@@ -16,8 +16,34 @@ impl Display for SingleLineFormatDisplay<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut printer = LinePrinter::new(self.mode, self.gutter, self.line_number, 0);
 
-        writeln!(f, "{}", printer.line(self.line))?;
-        write!(f, "{}", printer.annotate(self.line_highlight.clone()))
+        if self.line.len() > 120 {
+            // Print 116 characters centered around the center of the highlight range.
+            // The remaining 4 characters are for an end ellipsis " ...".
+            let highlight_center = (self.line_highlight.start + self.line_highlight.end) / 2;
+            let display_min = highlight_center
+                .saturating_sub(116 / 2)
+                .min(self.line.len().saturating_sub(116));
+            let display_max = display_min + 116;
+
+            writeln!(
+                f,
+                "{} ...",
+                printer.line(&self.line[display_min..display_max])
+            )?;
+            write!(
+                f,
+                "{}",
+                printer.annotate(
+                    (self.line_highlight.start - display_min)
+                        ..(self.line_highlight.end - display_min)
+                )
+            )?;
+        } else {
+            writeln!(f, "{}", printer.line(self.line))?;
+            write!(f, "{}", printer.annotate(self.line_highlight.clone()))?;
+        }
+
+        Ok(())
     }
 }
 

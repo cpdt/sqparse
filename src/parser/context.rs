@@ -60,6 +60,15 @@ pub enum ContextType {
     /// ```
     FunctionLiteral,
 
+    /// Literal defining a lambda function.
+    ///
+    /// # Example
+    /// ```text
+    /// local myexp = @(a,b) a + b
+    ///               ^^^^^^^^^^^^ lambda literal
+    /// ```
+    LambdaLiteral,
+
     /// Literal defining an anonymous class.
     ///
     /// # Example
@@ -546,6 +555,7 @@ impl std::fmt::Display for ContextType {
             ContextType::ArrayLiteral => write!(f, "array literal"),
             ContextType::VectorLiteral => write!(f, "vector literal"),
             ContextType::FunctionLiteral => write!(f, "function literal"),
+            ContextType::LambdaLiteral => write!(f, "lambda literal"),
             ContextType::ClassLiteral => write!(f, "class literal"),
             ContextType::CallArgumentList => write!(f, "argument list"),
             ContextType::Statement => write!(f, "statement"),

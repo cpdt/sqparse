@@ -1,13 +1,13 @@
 use crate::ast::{
     ArrayExpression, BinaryExpression, CallExpression, ClassExpression, CommaExpression,
     DelegateExpression, ExpectExpression, Expression, FunctionExpression, IndexExpression,
-    LiteralExpression, ParensExpression, PostfixExpression, Precedence, PrefixExpression,
-    PropertyExpression, RootVarExpression, TableExpression, TernaryExpression, VarExpression,
-    VectorExpression,
+    LambdaExpression, LiteralExpression, ParensExpression, PostfixExpression, Precedence,
+    PrefixExpression, PropertyExpression, RootVarExpression, TableExpression, TernaryExpression,
+    VarExpression, VectorExpression,
 };
 use crate::parser::array::array_value;
 use crate::parser::class::class_definition;
-use crate::parser::function::function_definition;
+use crate::parser::function::{call_argument, function_definition, function_params};
 use crate::parser::identifier::{identifier, method_identifier};
 use crate::parser::operator::{binary_operator, postfix_operator, prefix_operator};
 use crate::parser::parse_result_ext::ParseResultExt;
@@ -51,6 +51,7 @@ fn value(tokens: TokenList) -> ParseResult<Box<Expression>> {
         .or_try(|| prefix(tokens).map_val(Expression::Prefix))
         .or_try(|| delegate(tokens).map_val(Expression::Delegate))
         .or_try(|| expect(tokens).map_val(Expression::Expect))
+        .or_try(|| lambda(tokens).map_val(Expression::Lambda))
         .or_error(|| tokens.error(ParseErrorType::ExpectedValue))
         .map_val(Box::new)
 }
@@ -259,6 +260,34 @@ pub fn expect(tokens: TokenList) -> ParseResult<ExpectExpression> {
         })
 }
 
+pub fn lambda(tokens: TokenList) -> ParseResult<LambdaExpression> {
+    tokens
+        .terminal(TerminalToken::At)
+        .determines(|tokens, at| {
+            let (tokens, (open, params, close)) =
+                tokens.terminal(TerminalToken::OpenBracket).opens(
+                    ContextType::FunctionParamList,
+                    |tokens| tokens.terminal(TerminalToken::CloseBracket),
+                    |tokens, open, close| {
+                        let (tokens, params) = function_params(tokens)?;
+                        Ok((tokens, (open, params, close)))
+                    },
+                )?;
+            let (tokens, value) = expression(tokens, Precedence::Comma)?;
+            Ok((
+                tokens,
+                LambdaExpression {
+                    at,
+                    open,
+                    params,
+                    close,
+                    value,
+                },
+            ))
+        })
+        .with_context_from(ContextType::LambdaLiteral, tokens)
+}
+
 struct ExpressionRef<'a, 's>(&'a mut Option<Box<Expression<'s>>>);
 impl<'a, 's> ExpressionRef<'a, 's> {
     fn take(self) -> Box<Expression<'s>> {
@@ -437,17 +466,7 @@ fn call<'s>(
             |tokens| tokens.terminal(TerminalToken::CloseBracket),
             |tokens, open, close| {
                 tokens
-                    .separated_list_trailing0(
-                        |tokens| {
-                            let res = expression(tokens, Precedence::Comma).map_val(|expr| *expr);
-                            if tokens.is_ended() {
-                                res
-                            } else {
-                                res.definite()
-                            }
-                        },
-                        |tokens| tokens.terminal(TerminalToken::Comma),
-                    )
+                    .many_until_ended(call_argument)
                     .map_val(|args| (open, args, close))
             },
         )

@@ -11,9 +11,14 @@ use crate::parser::token_list::TokenList;
 use crate::parser::token_list_ext::TokenListExt;
 use crate::parser::ParseResult;
 use crate::token::TerminalToken;
-use crate::{ContextType, ParseErrorType};
+use crate::{ContextType, Flavor, ParseErrorType};
 
 pub fn type_(tokens: TokenList) -> ParseResult<Type> {
+    // Only SquirrelRespawn supports types. Other flavors only support `local` and `var`.
+    if tokens.flavor() != Flavor::SquirrelRespawn {
+        return local(tokens).map_val(Type::Local);
+    }
+
     let (mut next_tokens, mut type_) = base(tokens)?;
 
     loop {

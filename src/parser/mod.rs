@@ -22,6 +22,7 @@ mod variable;
 pub use self::context::ContextType;
 pub use self::error::{ParseError, ParseErrorContext, ParseErrorType};
 use crate::ast::Program;
+use crate::Flavor;
 
 use crate::lexer::TokenItem;
 use crate::parser::statement::statement;
@@ -49,11 +50,11 @@ type ParseResult<'s, T> = Result<(TokenList<'s>, T), ParseError>;
 /// "#;
 /// let tokens = tokenize(source, Flavor::SquirrelRespawn).unwrap();
 ///
-/// let program = parse(&tokens).unwrap();
+/// let program = parse(&tokens, Flavor::SquirrelRespawn).unwrap();
 /// assert_eq!(program.statements.len(), 3);
 /// ```
-pub fn parse<'s>(items: &'s [TokenItem<'s>]) -> Result<Program<'s>, ParseError> {
-    let tokens = TokenList::new(items);
+pub fn parse<'s>(items: &'s [TokenItem<'s>], flavor: Flavor) -> Result<Program<'s>, ParseError> {
+    let tokens = TokenList::new(flavor, items);
     let (tokens, statements) = tokens.many_until_ended(statement)?;
     assert!(tokens.is_ended());
     Ok(Program { statements })

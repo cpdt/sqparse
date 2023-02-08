@@ -1,6 +1,6 @@
 use crate::ast::{
-    FunctionCaptures, FunctionDefinition, FunctionEnvironment, FunctionParam, FunctionParams,
-    FunctionRefParam, Precedence, SeparatedList1,
+    CallArgument, FunctionCaptures, FunctionDefinition, FunctionEnvironment, FunctionParam,
+    FunctionParams, FunctionRefParam, Precedence, SeparatedList1,
 };
 use crate::parser::expression::expression;
 use crate::parser::identifier::identifier;
@@ -171,4 +171,10 @@ pub fn function_ref_param(tokens: TokenList) -> ParseResult<FunctionRefParam> {
             initializer,
         },
     ))
+}
+
+pub fn call_argument(tokens: TokenList) -> ParseResult<CallArgument> {
+    let (tokens, value) = expression(tokens, Precedence::Comma)?;
+    let (tokens, comma) = tokens.terminal(TerminalToken::Comma).maybe(tokens)?;
+    Ok((tokens, CallArgument { value, comma }))
 }

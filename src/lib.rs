@@ -29,7 +29,7 @@
 //! "#;
 //! let tokens = tokenize(source, Flavor::SquirrelRespawn).unwrap();
 //!
-//! let program = parse(&tokens).unwrap();
+//! let program = parse(&tokens, Flavor::SquirrelRespawn).unwrap();
 //! println!("Program: {:#?}", program);
 //! ```
 

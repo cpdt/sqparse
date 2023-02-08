@@ -1,6 +1,6 @@
 use crate::ast::{
-    ArrayValue, BinaryOperator, ClassDefinition, FunctionDefinition, Identifier, MethodIdentifier,
-    PostfixOperator, PrefixOperator, SeparatedList1, SeparatedListTrailing0, TableSlot, Type,
+    ArrayValue, BinaryOperator, CallArgument, ClassDefinition, FunctionDefinition, FunctionParams,
+    Identifier, MethodIdentifier, PostfixOperator, PrefixOperator, SeparatedList1, TableSlot, Type,
 };
 use crate::token::{LiteralToken, Token};
 
@@ -27,6 +27,7 @@ pub enum Expression<'s> {
     Class(ClassExpression<'s>),
     Array(ArrayExpression<'s>),
     Function(FunctionExpression<'s>),
+    Lambda(LambdaExpression<'s>),
     Call(CallExpression<'s>),
     Delegate(DelegateExpression<'s>),
     Vector(VectorExpression<'s>),
@@ -117,6 +118,18 @@ pub struct FunctionExpression<'s> {
     pub return_type: Option<Type<'s>>,
     pub function: &'s Token<'s>,
     pub definition: FunctionDefinition<'s>,
+}
+
+/// A lambda function literal.
+///
+/// Grammar: `@` `(` [FunctionParams] `)` [Expression]
+#[derive(Debug, Clone)]
+pub struct LambdaExpression<'s> {
+    pub at: &'s Token<'s>,
+    pub open: &'s Token<'s>,
+    pub params: FunctionParams<'s>,
+    pub close: &'s Token<'s>,
+    pub value: Box<Expression<'s>>,
 }
 
 /// A delegate expression.
@@ -210,12 +223,12 @@ pub struct PostfixExpression<'s> {
 
 /// A function call expression.
 ///
-/// Grammar: [Expression] `(` [SeparatedListTrailing0]<[Expression] `,`> `)` [TableExpression]?
+/// Grammar: [Expression] `(` [CallArgument]? `)` [TableExpression]?
 #[derive(Debug, Clone)]
 pub struct CallExpression<'s> {
     pub function: Box<Expression<'s>>,
     pub open: &'s Token<'s>,
-    pub arguments: SeparatedListTrailing0<'s, Expression<'s>>,
+    pub arguments: Vec<CallArgument<'s>>,
     pub close: &'s Token<'s>,
     pub post_initializer: Option<TableExpression<'s>>,
 }

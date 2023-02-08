@@ -11,7 +11,7 @@ fn main() {
         }
     };
 
-    let ast = match parse(&tokens) {
+    let ast = match parse(&tokens, Flavor::SquirrelRespawn) {
         Ok(ast) => ast,
         Err(err) => {
             eprintln!(

@@ -84,3 +84,14 @@ pub struct FunctionRefParam<'s> {
     pub name: Option<Identifier<'s>>,
     pub initializer: Option<VarInitializer<'s>>,
 }
+
+/// Argument in a [`CallExpression`].
+///
+/// Grammar: [Expression] `,`?
+///
+/// [`CallExpression`]: crate::ast::CallExpression
+#[derive(Debug, Clone)]
+pub struct CallArgument<'s> {
+    pub value: Box<Expression<'s>>,
+    pub comma: Option<&'s Token<'s>>,
+}

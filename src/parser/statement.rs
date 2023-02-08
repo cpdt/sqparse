@@ -24,7 +24,7 @@ use crate::parser::token_list_ext::TokenListExt;
 use crate::parser::type_::type_;
 use crate::parser::variable::{var_definition, var_initializer};
 use crate::parser::ParseResult;
-use crate::token::{TerminalToken, Token};
+use crate::token::{TerminalToken, Token, TokenType};
 use crate::{ContextType, ParseErrorType};
 
 pub fn statement(tokens: TokenList) -> ParseResult<Statement> {
@@ -32,11 +32,18 @@ pub fn statement(tokens: TokenList) -> ParseResult<Statement> {
 
     // Statement must end with a semicolon, newline, or end of input.
     if statement.semicolon.is_some() || next_tokens.is_newline() || next_tokens.is_ended() {
-        Ok((next_tokens, statement))
-    } else {
-        Err(next_tokens.error_before(ParseErrorType::ExpectedEndOfStatement))
-            .with_context_from(ContextType::Statement, tokens)
+        return Ok((next_tokens, statement));
     }
+
+    // Statement can end if the last token was a `}`.
+    if let Some(last_item) = next_tokens.previous() {
+        if let TokenType::Terminal(TerminalToken::CloseBrace) = last_item.token.ty {
+            return Ok((next_tokens, statement));
+        }
+    }
+
+    Err(next_tokens.error_before(ParseErrorType::ExpectedEndOfStatement))
+        .with_context_from(ContextType::Statement, tokens)
 }
 
 fn inner_statement(tokens: TokenList) -> ParseResult<Statement> {

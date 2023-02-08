@@ -172,7 +172,8 @@ define_terminals! {
         Comma => ",",
         Colon => ":",
         Question => "?",
-        Semicolon => ";"
+        Semicolon => ";",
+        At => "@"
     }
 }
 

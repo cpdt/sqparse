@@ -49,7 +49,7 @@ fn main() {
         println!("  tokenize: {lex_secs}s");
 
         let parse_start = Instant::now();
-        if let Err(err) = parse(&tokens) {
+        if let Err(err) = parse(&tokens, Flavor::SquirrelRespawn) {
             eprintln!("{}", err.display(&file_text, &tokens, path.to_str()));
             std::process::exit(1);
         }
