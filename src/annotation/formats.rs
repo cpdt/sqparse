@@ -17,25 +17,44 @@ impl Display for SingleLineFormatDisplay<'_> {
         let mut printer = LinePrinter::new(self.mode, self.gutter, self.line_number, 0);
 
         if self.line.len() > 120 {
-            // Print 116 characters centered around the center of the highlight range.
-            // The remaining 4 characters are for an end ellipsis " ...".
+            // Print 120 characters centered around the center of the highlight range.
             let highlight_center = (self.line_highlight.start + self.line_highlight.end) / 2;
-            let display_min = highlight_center
-                .saturating_sub(116 / 2)
-                .min(self.line.len().saturating_sub(116));
-            let display_max = display_min + 116;
+            let display_start = highlight_center
+                .saturating_sub(120 / 2)
+                .min(self.line.len().saturating_sub(120));
+            let display_end = display_start + 120;
 
-            writeln!(
-                f,
-                "{} ...",
-                printer.line(&self.line[display_min..display_max])
-            )?;
+            let is_start_elided = display_start > 4;
+            let is_end_elided = display_end < self.line.len() - 4;
+
+            let elided_start = if is_start_elided {
+                display_start + 4
+            } else {
+                display_start
+            };
+            let elided_end = if is_end_elided {
+                display_end - 4
+            } else {
+                display_end
+            };
+
+            write!(f, "{}", printer.line(""))?;
+
+            if is_start_elided {
+                write!(f, "... ")?;
+            }
+            write!(f, "{}", &self.line[elided_start..elided_end])?;
+            if is_end_elided {
+                write!(f, " ...")?;
+            }
+
+            writeln!(f)?;
             write!(
                 f,
                 "{}",
                 printer.annotate(
-                    (self.line_highlight.start - display_min)
-                        ..(self.line_highlight.end - display_min)
+                    (self.line_highlight.start.max(display_start) - display_start)
+                        ..(self.line_highlight.end.min(display_end) - display_start)
                 )
             )?;
         } else {
