@@ -42,6 +42,13 @@ pub fn statement(tokens: TokenList) -> ParseResult<Statement> {
         }
     }
 
+    // Statement can end if the last token is an empty statement.
+    if let Some(last_item) = next_tokens.next() {
+        if let TokenType::Empty = last_item.token.ty {
+            return Ok((next_tokens, statement));
+        }
+    }
+
     Err(next_tokens.error_before(ParseErrorType::ExpectedEndOfStatement))
         .with_context_from(ContextType::Statement, tokens)
 }
